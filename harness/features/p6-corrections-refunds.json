@@ -3,8 +3,8 @@
   "priority": 16,
   "area": "P6",
   "title": "P6 — Koreksi, Pembatalan, Refund, dan Input Susulan",
-  "status": "not_started",
-  "branch": null,
+  "status": "in_progress",
+  "branch": "p6-corrections-refunds",
   "depends_on": [
     "p5-qris-evidence"
   ],

@@ -67,4 +67,44 @@ export class SalesController {
   ) {
     return this.sales.confirm(auth, key, id, input);
   }
+  // P6: input susulan, koreksi, pembatalan, refund — admin saja.
+  @Post('backfill')
+  @HttpCode(200)
+  backfill(
+    @Headers('authorization') auth: unknown,
+    @Headers('idempotency-key') key: unknown,
+    @Body() input: unknown,
+  ) {
+    return this.sales.backfill(auth, key, input);
+  }
+  @Post(':id/correct')
+  @HttpCode(200)
+  correct(
+    @Headers('authorization') auth: unknown,
+    @Headers('idempotency-key') key: unknown,
+    @Param('id') id: string,
+    @Body() input: unknown,
+  ) {
+    return this.sales.correct(auth, key, id, input);
+  }
+  @Post(':id/cancel')
+  @HttpCode(200)
+  cancel(
+    @Headers('authorization') auth: unknown,
+    @Headers('idempotency-key') key: unknown,
+    @Param('id') id: string,
+    @Body() input: unknown,
+  ) {
+    return this.sales.cancel(auth, key, id, input);
+  }
+  @Post(':id/refund')
+  @HttpCode(200)
+  refund(
+    @Headers('authorization') auth: unknown,
+    @Headers('idempotency-key') key: unknown,
+    @Param('id') id: string,
+    @Body() input: unknown,
+  ) {
+    return this.sales.refund(auth, key, id, input);
+  }
 }

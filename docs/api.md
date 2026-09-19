@@ -136,6 +136,42 @@ Retry identik idempoten seperti tunai.
 Penghapusan otomatis bukti tidak ada pada MVP (Q27); kapasitas disk dipantau
 operator.
 
+## Koreksi, pembatalan, refund, input susulan (#13–#19, P6)
+
+Keempat operasi berikut hanya admin (karyawan 403), idempoten via header
+Idempotency-Key, dan tercatat audit. Tidak ada jalur lain yang mengubah
+penjualan; catatan lunas tidak diedit/dihapus (Q11) — koreksi membuat
+catatan pengganti yang menunjuk catatan lama (`correctsId`), catatan lama
+menyimpan `correctedById` dan penerimaan aslinya tetap terbaca sebagai
+riwayat. Penjualan pengganti tidak dapat dikoreksi lagi; satu koreksi per
+catatan.
+
+- `POST /sales/backfill` (Q12/Q23): input susulan dengan waktu kejadian asli
+  (`occurredAt` wajib, tidak boleh di masa depan), petugas (`occurredBy`),
+  referensi catatan manual (`manualRef`), alasan, dan harga historis
+  `unitPrice` per item. Metode default cash; penerimaan cash dicatat pada
+  waktu uang diterima (Q21). Metode qris mengikuti alur konfirmasi P5.
+- `POST /sales/:id/correct`: item pengganti wajib menyertakan `unitPrice`
+  (harga historis beralasan) dan `reason`. Penerimaan efektif mengikuti
+  total backend tanpa membuat uang kedua — laporan efektif menghitung
+  catatan pengganti saja. Pengganti memiliki occurredAt/waktu terima asli.
+  Koreksi metode menjadi QRIS (termasuk QRIS→QRIS) wajib `merchantRef`
+  (Q25: metode QRIS tetap terverifikasi).
+- `POST /sales/:id/cancel`: wajib `reason`. Penjualan pending yang belum
+  dibayar dibatalkan tanpa refund; penjualan lunas tetap menyimpan
+  penerimaannya — dana yang pernah diterima tidak hilang dari catatan dan
+  refund dicatat terpisah. Penjualan yang sudah dikoreksi/batal ditolak 409.
+- `POST /sales/:id/refund`: hanya penuh, nominal selalu sama dengan
+  penerimaan aktual (trigger DB menolak selisih); `method` = metode aktual
+  pengembalian, `occurredAt` = waktu uang dikembalikan (Q21), wajib alasan.
+  Refund atas penjualan pending (belum lunas) ditolak; ganda ditolak 409;
+  koreksi biasa setelah refund ditolak. Penjualan lunas tetap berstatus
+  `paid` dengan blok `refund` pada detail.
+
+Status penjualan: `pending` (QRIS belum dikonfirmasi), `paid`, atau
+`cancelled`. Dua operasi konkuren pada penjualan yang sama (koreksi/refund)
+hanya menghasilkan satu efek; yang lain 409.
+
 ## Verifikasi
 
 `npm run test:api` membuat PostgreSQL container sintetis terisolasi dengan port

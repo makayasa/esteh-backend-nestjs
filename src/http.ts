@@ -129,6 +129,54 @@ export function configureHttp(app: INestApplication) {
       reason: { ...string, minLength: 1, maxLength: 500 },
       merchantRef: { ...string, minLength: 1, maxLength: 128 },
     },
+    '/sales/backfill': {
+      items: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['productId', 'quantity', 'unitPrice'],
+          properties: {
+            productId: { ...string, minLength: 1, maxLength: 64 },
+            quantity: { type: 'integer', minimum: 1, maximum: 10000 },
+            unitPrice: { type: 'integer', minimum: 1, maximum: 1000000000 },
+          },
+        },
+      },
+      occurredAt: { ...string, minLength: 20, maxLength: 64 },
+      occurredBy: string,
+      manualRef: { ...string, minLength: 1, maxLength: 128 },
+      reason: { ...string, minLength: 1, maxLength: 500 },
+      method: { ...string, enum: ['cash', 'qris'] },
+    },
+    '/sales/{id}/correct': {
+      items: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['productId', 'quantity', 'unitPrice'],
+          properties: {
+            productId: { ...string, minLength: 1, maxLength: 64 },
+            quantity: { type: 'integer', minimum: 1, maximum: 10000 },
+            unitPrice: { type: 'integer', minimum: 1, maximum: 1000000000 },
+          },
+        },
+      },
+      reason: { ...string, minLength: 1, maxLength: 500 },
+      method: { ...string, enum: ['cash', 'qris'] },
+      merchantRef: { ...string, minLength: 1, maxLength: 128 },
+    },
+    '/sales/{id}/cancel': {
+      reason: { ...string, minLength: 1, maxLength: 500 },
+    },
+    '/sales/{id}/refund': {
+      method: { ...string, minLength: 1, maxLength: 32 },
+      occurredAt: { ...string, minLength: 20, maxLength: 64 },
+      reason: { ...string, minLength: 1, maxLength: 500 },
+    },
   };
   for (const [path, properties] of Object.entries(bodies)) {
     const operation = document.paths[path]?.post;

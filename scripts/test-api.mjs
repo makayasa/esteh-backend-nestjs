@@ -1425,24 +1425,543 @@ try {
     console.log(
       'PASS QRIS pending/evidence privacy/sanitization/confirm/exception/race',
     );
-    // P7 (issues #20-#25): stok, pembelian, pengeluaran — khusus admin.
+    // Waktu berjalan melewati idle 12 jam: maju dulu, lalu login segar P6.
+    time = new Date('2026-09-28T10:00:00Z'); // WIB 09-28; kemarin = 09-27
+    const p6AdminLogin = await clockApi(
+      '/auth/login',
+      credentials,
+      undefined,
+      'p6-admin-login-01',
+    );
+    assert.equal(p6AdminLogin.status, 200, JSON.stringify(p6AdminLogin.body));
+    const p6Admin = p6AdminLogin.body.token;
+    const p6Reader = (
+      await clockApi(
+        '/auth/login',
+        { username: reader.username, password: reader.password },
+        undefined,
+        'p6-reader-login-01',
+      )
+    ).body.token;
+    // P6: input susulan, koreksi, pembatalan, refund (admin saja).
+    const salah = await clockApi(
+      '/products',
+      { name: 'Teh Salah', price: 10000, available: true },
+      p6Admin,
+      'product-salah-01',
+    );
+    assert.equal(salah.status, 200);
+    // Validasi payload: referensi manual, alasan, waktu kejadian wajib/benar.
+    const backfillInput = {
+      items: [{ productId: manis.body.id, quantity: 2, unitPrice: 4500 }],
+      occurredAt: '2026-09-27T08:00:00Z',
+      occurredBy: readerAccount.id,
+      manualRef: 'NOTA-001',
+      reason: 'lupa input kemarin',
+    };
+    for (const forged of [
+      { ...backfillInput, manualRef: undefined },
+      { ...backfillInput, reason: undefined },
+      { ...backfillInput, occurredAt: '2026-09-29T00:00:00Z' },
+      { ...backfillInput, occurredBy: 'no-such-account' },
+      { ...backfillInput, method: 'pulsa' },
+    ])
+      assert.equal(
+        (
+          await clockApi(
+            '/sales/backfill',
+            forged,
+            p6Admin,
+            'p6-backfill-forged-01',
+          )
+        ).status,
+        400,
+      );
+    // AC1: waktu kejadian asli, waktu input, petugas, referensi manual,
+    // dan harga historis beralasan (Q12/Q23).
+    const backfill = await clockApi(
+      '/sales/backfill',
+      backfillInput,
+      p6Admin,
+      'p6-backfill-01',
+    );
+    assert.equal(backfill.status, 200, JSON.stringify(backfill.body));
+    assert.equal(backfill.body.occurredAt, '2026-09-27T08:00:00.000Z');
+    assert.equal(backfill.body.recordedAt, new Date(time).toISOString());
+    assert.equal(backfill.body.occurredBy, readerAccount.id);
+    assert.equal(backfill.body.recordedBy, account.id);
+    assert.equal(backfill.body.manualRef, 'NOTA-001');
+    assert.equal(backfill.body.total, 9000); // harga historis 4500, bukan 6500
+    assert.equal(backfill.body.status, 'paid');
+    assert.equal(backfill.body.receipt.amount, 9000);
+    assert.equal(backfill.body.receipt.receivedAt, '2026-09-27T08:00:00.000Z');
+    const backfillRetry = await clockApi(
+      '/sales/backfill',
+      backfillInput,
+      p6Admin,
+      'p6-backfill-01',
+    );
+    assert.deepEqual(backfillRetry.body, backfill.body);
+    // AC2: salah catat 10000 padahal 5000 — koreksi tanpa refund fiktif.
+    const wrongSale = await clockApi(
+      '/sales',
+      { items: [{ productId: salah.body.id, quantity: 1 }] },
+      p6Reader,
+      'sale-wrong-01',
+    );
+    assert.equal(wrongSale.status, 200);
+    assert.equal(wrongSale.body.total, 10000);
+    const correctInput = {
+      items: [{ productId: salah.body.id, quantity: 1, unitPrice: 5000 }],
+      reason: 'salah catat harga; seharusnya 5000',
+    };
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${wrongSale.body.id}/correct`,
+          {
+            items: [{ productId: salah.body.id, quantity: 1 }],
+            reason: 'tanpa harga',
+          },
+          p6Admin,
+          'p6-correct-nohprice-01',
+        )
+      ).status,
+      400,
+    );
+    const correction = await clockApi(
+      `/sales/${wrongSale.body.id}/correct`,
+      correctInput,
+      p6Admin,
+      'p6-correct-01',
+    );
+    assert.equal(correction.status, 200, JSON.stringify(correction.body));
+    assert.equal(correction.body.correctsId, wrongSale.body.id);
+    assert.equal(correction.body.total, 5000);
+    assert.equal(correction.body.receipt.amount, 5000); // penerimaan efektif
+    assert.equal(correction.body.occurredAt, wrongSale.body.occurredAt);
+    assert.equal(
+      correction.body.receipt.receivedAt,
+      wrongSale.body.receipt.receivedAt,
+    );
+    // Riwayat nilai lama tetap terlihat; tidak ada refund fiktif.
+    const oldRow = (
+      await db.query(
+        'SELECT s."correctedById", r.amount FROM "Sale" s JOIN "Receipt" r ON r."saleId" = s.id WHERE s.id = $1',
+        [wrongSale.body.id],
+      )
+    ).rows[0];
+    assert.equal(oldRow.amount, 10000);
+    assert.equal(oldRow.correctedById, correction.body.id);
+    assert.equal(
+      (
+        await db.query('SELECT count(*)::int AS n FROM "Refund"')
+      ).rows[0].n,
+      0,
+    );
+    const correctionRetry = await clockApi(
+      `/sales/${wrongSale.body.id}/correct`,
+      correctInput,
+      p6Admin,
+      'p6-correct-01',
+    );
+    assert.deepEqual(correctionRetry.body, correction.body);
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${wrongSale.body.id}/correct`,
+          correctInput,
+          p6Admin,
+          'p6-correct-02',
+        )
+      ).status,
+      409,
+    );
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${correction.body.id}/correct`,
+          correctInput,
+          p6Admin,
+          'p6-correct-of-correct-01',
+        )
+      ).status,
+      409,
+    );
+    // AC3: koreksi item dengan total sama tidak membuat pembayaran kedua
+    // (jumlah penerimaan efektif tidak berubah).
+    const sameSale = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 2 }] },
+      p6Reader,
+      'sale-same-total-01',
+    );
+    assert.equal(sameSale.status, 200);
+    const effectiveReceipts = async () =>
+      (
+        await db.query(
+          'SELECT count(*)::int AS n FROM "Receipt" r JOIN "Sale" s ON r."saleId" = s.id WHERE s."correctedById" IS NULL',
+        )
+      ).rows[0].n;
+    const beforeSame = await effectiveReceipts();
+    const sameCorrection = await clockApi(
+      `/sales/${sameSale.body.id}/correct`,
+      {
+        items: [{ productId: manis.body.id, quantity: 1, unitPrice: 13000 }],
+        reason: 'perbaikan rincian item, total sama',
+      },
+      p6Admin,
+      'p6-correct-same-01',
+    );
+    assert.equal(sameCorrection.status, 200, JSON.stringify(sameCorrection.body));
+    assert.equal(sameCorrection.body.total, 13000);
+    assert.equal(await effectiveReceipts(), beforeSame);
+    const oldSameReceipt = (
+      await db.query(
+        'SELECT r.amount FROM "Receipt" r JOIN "Sale" s ON r."saleId" = s.id WHERE s.id = $1',
+        [sameSale.body.id],
+      )
+    ).rows[0].amount;
+    assert.equal(oldSameReceipt, 13000);
+    // Q25: koreksi metode menjadi QRIS menuntut verifikasi merchant.
+    const toQris = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 1 }] },
+      p6Reader,
+      'sale-toqris-01',
+    );
+    assert.equal(toQris.status, 200);
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${toQris.body.id}/correct`,
+          {
+            items: [{ productId: manis.body.id, quantity: 1, unitPrice: 6500 }],
+            method: 'qris',
+            reason: 'ubah metode ke qris',
+          },
+          p6Admin,
+          'p6-correct-qris-noref-01',
+        )
+      ).status,
+      400,
+    );
+    const qrisCorrection = await clockApi(
+      `/sales/${toQris.body.id}/correct`,
+      {
+        items: [{ productId: manis.body.id, quantity: 1, unitPrice: 6500 }],
+        method: 'qris',
+        merchantRef: 'QR-CORR-1',
+        reason: 'ubah metode ke qris',
+      },
+      p6Admin,
+      'p6-correct-qris-01',
+    );
+    assert.equal(qrisCorrection.status, 200, JSON.stringify(qrisCorrection.body));
+    assert.equal(qrisCorrection.body.receipt.method, 'qris');
+    assert.equal(
+      (
+        await db.query(
+          'SELECT "merchantRef" FROM "Receipt" WHERE "saleId" = $1',
+          [qrisCorrection.body.id],
+        )
+      ).rows[0].merchantRef,
+      'QR-CORR-1',
+    );
+    // AC4: pending yang belum dibayar dapat dibatalkan tanpa refund.
+    const pendingCancel = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 1 }], method: 'qris' },
+      p6Reader,
+      'sale-p6-pending-01',
+    );
+    assert.equal(pendingCancel.status, 200);
+    const cancelPending = await clockApi(
+      `/sales/${pendingCancel.body.id}/cancel`,
+      { reason: 'pelanggan membatalkan pesanan' },
+      p6Admin,
+      'p6-cancel-pending-01',
+    );
+    assert.equal(cancelPending.status, 200, JSON.stringify(cancelPending.body));
+    assert.equal(cancelPending.body.status, 'cancelled');
+    assert.equal(cancelPending.body.receipt, null);
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${pendingCancel.body.id}/confirm`,
+          {},
+          p6Admin,
+          'p6-confirm-cancelled-01',
+        )
+      ).status,
+      409,
+    );
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${pendingCancel.body.id}/cancel`,
+          { reason: 'ulang' },
+          p6Admin,
+          'p6-cancel-pending-02',
+        )
+      ).status,
+      409,
+    );
+    // AC4: pembatalan lunas tidak menyembunyikan dana yang pernah diterima.
+    const paidCancel = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 1 }] },
+      p6Reader,
+      'sale-p6-paid-01',
+    );
+    assert.equal(paidCancel.status, 200);
+    const cancelPaid = await clockApi(
+      `/sales/${paidCancel.body.id}/cancel`,
+      { reason: 'transaksi ganda' },
+      p6Admin,
+      'p6-cancel-paid-01',
+    );
+    assert.equal(cancelPaid.status, 200, JSON.stringify(cancelPaid.body));
+    assert.equal(cancelPaid.body.status, 'cancelled');
+    const paidReceipt = (
+      await db.query(
+        'SELECT r.amount FROM "Receipt" r JOIN "Sale" s ON r."saleId" = s.id WHERE s.id = $1',
+        [paidCancel.body.id],
+      )
+    ).rows[0];
+    assert.equal(paidReceipt.amount, 6500); // dana tetap tercatat
+    const refundInput = {
+      method: 'transfer',
+      occurredAt: '2026-09-28T09:00:00Z',
+      reason: 'uang dikembalikan pelanggan',
+    };
+    for (const [op, key, payload] of [
+      ['backfill', 'p6-forged-backfill-01', backfillInput],
+      [
+        'correct',
+        'p6-forged-correct-01',
+        {
+          items: [{ productId: manis.body.id, quantity: 1, unitPrice: 6500 }],
+          reason: 'coba koreksi',
+        },
+      ],
+      ['cancel', 'p6-forged-cancel-01', { reason: 'coba batal' }],
+      ['refund', 'p6-forged-refund-01', refundInput],
+    ])
+      assert.equal(
+        (
+          await clockApi(
+            op === 'backfill'
+              ? '/sales/backfill'
+              : `/sales/${adminQris.body.id}/${op}`,
+            payload,
+            p6Reader,
+            key,
+          )
+        ).status,
+        403,
+        op,
+      );
+    // AC5: refund penuh sekali; parsial/pending/ganda ditolak.
+    const freshPending = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 1 }], method: 'qris' },
+      p6Reader,
+      'sale-p6-refund-pending-01',
+    );
+    assert.equal(freshPending.status, 200);
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${freshPending.body.id}/refund`,
+          { method: 'transfer', reason: 'belum dibayar' },
+          p6Admin,
+          'p6-refund-pending-01',
+        )
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${qrisCorrection.body.id}/refund`,
+          { ...refundInput, amount: 1000 },
+          p6Admin,
+          'p6-refund-partial-01',
+        )
+      ).status,
+      400,
+    );
+    const refund = await clockApi(
+      `/sales/${qrisCorrection.body.id}/refund`,
+      refundInput,
+      p6Admin,
+      'p6-refund-01',
+    );
+    assert.equal(refund.status, 200, JSON.stringify(refund.body));
+    assert.equal(refund.body.refund.amount, 6500);
+    assert.equal(refund.body.refund.method, 'transfer');
+    assert.equal(refund.body.refund.occurredAt, '2026-09-28T09:00:00.000Z');
+    assert.equal(refund.body.status, 'paid'); // penerimaan tetap terlihat
+    const refundRetry = await clockApi(
+      `/sales/${qrisCorrection.body.id}/refund`,
+      refundInput,
+      p6Admin,
+      'p6-refund-01',
+    );
+    assert.deepEqual(refundRetry.body, refund.body);
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${qrisCorrection.body.id}/refund`,
+          refundInput,
+          p6Admin,
+          'p6-refund-02',
+        )
+      ).status,
+      409,
+    );
+    // Koreksi biasa setelah refund ditolak; refund atas catatan lama juga.
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${qrisCorrection.body.id}/correct`,
+          {
+            items: [{ productId: manis.body.id, quantity: 1, unitPrice: 6500 }],
+            method: 'qris',
+            merchantRef: 'QR-CORR-1',
+            reason: 'koreksi setelah refund',
+          },
+          p6Admin,
+          'p6-correct-after-refund-01',
+        )
+      ).status,
+      409,
+    );
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${wrongSale.body.id}/refund`,
+          refundInput,
+          p6Admin,
+          'p6-refund-corrected-01',
+        )
+      ).status,
+      409,
+    );
+    // Invariant DB: refund wajib sama dengan penerimaan aktual.
+    await assert.rejects(
+      db.query(
+        'INSERT INTO "Refund" (id, "saleId", amount, method, reason, "occurredAt", "recordedAt", "recordedBy") VALUES (gen_random_uuid()::text, $1, 1, $$cash$$, $$x$$, now(), now(), $2)',
+        [paidCancel.body.id, account.id],
+      ),
+    );
+    // Konkurensi: dua refund dan dua koreksi bersamaan — satu efek saja.
+    const raceRefundSale = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 1 }] },
+      p6Reader,
+      'sale-p6-refund-race-01',
+    );
+    assert.equal(raceRefundSale.status, 200);
+    const refundRace = await Promise.all([
+      clockApi(
+        `/sales/${raceRefundSale.body.id}/refund`,
+        refundInput,
+        p6Admin,
+        'p6-refund-race-a-01',
+      ),
+      clockApi(
+        `/sales/${raceRefundSale.body.id}/refund`,
+        refundInput,
+        p6Admin,
+        'p6-refund-race-b-01',
+      ),
+    ]);
+    assert.deepEqual(
+      refundRace.map((row) => row.status).sort(),
+      [200, 409],
+      JSON.stringify(refundRace),
+    );
+    const raceCorrectSale = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 1 }] },
+      p6Reader,
+      'sale-p6-correct-race-01',
+    );
+    assert.equal(raceCorrectSale.status, 200);
+    const correctRace = await Promise.all([
+      clockApi(
+        `/sales/${raceCorrectSale.body.id}/correct`,
+        correctInput,
+        p6Admin,
+        'p6-correct-race-a-01',
+      ),
+      clockApi(
+        `/sales/${raceCorrectSale.body.id}/correct`,
+        correctInput,
+        p6Admin,
+        'p6-correct-race-b-01',
+      ),
+    ]);
+    assert.deepEqual(
+      correctRace.map((row) => row.status).sort(),
+      [200, 409],
+      JSON.stringify(correctRace),
+    );
+    // Rollback: kegagalan audit membatalkan koreksi tanpa jejak.
+    const rollbackTarget = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 1 }] },
+      p6Reader,
+      'sale-p6-rollback-01',
+    );
+    assert.equal(rollbackTarget.status, 200);
+    await db.query(
+      'CREATE TRIGGER reject_audit BEFORE INSERT ON "Audit" FOR EACH ROW EXECUTE FUNCTION reject_audit()',
+    );
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${rollbackTarget.body.id}/correct`,
+          correctInput,
+          p6Admin,
+          'p6-correct-rollback-01',
+        )
+      ).status,
+      500,
+    );
+    await db.query('DROP TRIGGER reject_audit ON "Audit"');
+    assert.equal(
+      (
+        await db.query(
+          'SELECT "correctedById" FROM "Sale" WHERE id = $1',
+          [rollbackTarget.body.id],
+        )
+      ).rows[0].correctedById,
+      null,
+    );
+    console.log(
+      'PASS P6 backfill/correction/cancel/refund rules, concurrency, rollback',
+    );
+    // P7 (issues #20-#25): stok, pembelian, pengeluaran — khusus p6Admin.
     const gula = await clockApi(
       '/materials',
       { name: 'Gula P7', unit: 'gram', quantityScale: 3 },
-      admin,
+      p6Admin,
       'p7-material-gula-01',
     );
     assert.equal(gula.status, 200, JSON.stringify(gula.body));
     const cup = await clockApi(
       '/materials',
       { name: 'Cup P7', unit: 'pcs', quantityScale: 0 },
-      admin,
+      p6Admin,
       'p7-material-cup-01',
     );
     assert.equal(cup.status, 200);
     const stockOf = async (id) =>
       (
-        await clockApi('/stock/balances', undefined, admin)
+        await clockApi('/stock/balances', undefined, p6Admin)
       ).body.items.find((row) => row.id === id).stock;
     // Issue #20: pembelian bahan menambah stok tepat sekali; alat tidak.
     const purchaseInput = {
@@ -1454,7 +1973,7 @@ try {
     const purchase = await clockApi(
       '/purchases',
       purchaseInput,
-      admin,
+      p6Admin,
       'p7-purchase-01',
     );
     assert.equal(purchase.status, 200, JSON.stringify(purchase.body));
@@ -1466,7 +1985,7 @@ try {
     // Retry konkuren idempoten: stok dan catatan tidak bertambah lagi.
     const purchaseRetries = await Promise.all(
       Array.from({ length: 3 }, () =>
-        clockApi('/purchases', purchaseInput, admin, 'p7-purchase-01'),
+        clockApi('/purchases', purchaseInput, p6Admin, 'p7-purchase-01'),
       ),
     );
     for (const repeat of purchaseRetries) assert.deepEqual(repeat, purchase);
@@ -1475,7 +1994,7 @@ try {
         await clockApi(
           '/purchases',
           { ...purchaseInput, items: [purchaseInput.items[0]] },
-          admin,
+          p6Admin,
           'p7-purchase-01',
         )
       ).status,
@@ -1502,7 +2021,7 @@ try {
     // Tidak ada jalur penerimaan kedua: endpoint lain tidak ada, retry tidak
     // menduplikasi ledger (cek di atas); karyawan tidak bisa apa pun (Q15).
     assert.equal(
-      (await clockApi('/purchases/' + purchase.body.id + '/receive', {}, admin)).status,
+      (await clockApi('/purchases/' + purchase.body.id + '/receive', {}, p6Admin)).status,
       404,
     );
     // Sesi employee/reader lama dicabut reset-password di bagian accounts;
@@ -1555,7 +2074,7 @@ try {
     const usage = await clockApi(
       '/stock/usage',
       { materialId: gula.body.id, quantity: 300, reason: 'Pemakaian harian' },
-      admin,
+      p6Admin,
       'p7-usage-01',
     );
     assert.equal(usage.status, 200, JSON.stringify(usage.body));
@@ -1564,7 +2083,7 @@ try {
     const waste = await clockApi(
       '/stock/waste',
       { materialId: gula.body.id, quantity: 50, reason: 'Terbuang' },
-      admin,
+      p6Admin,
       'p7-waste-01',
     );
     assert.equal(waste.status, 200);
@@ -1572,7 +2091,7 @@ try {
     const adjustment = await clockApi(
       '/stock/adjustment',
       { materialId: gula.body.id, delta: 120, reason: 'Hitung fisik' },
-      admin,
+      p6Admin,
       'p7-adjust-01',
     );
     assert.equal(adjustment.status, 200);
@@ -1582,7 +2101,7 @@ try {
         await clockApi(
           '/stock/usage',
           { materialId: gula.body.id, quantity: 2000, reason: 'Berlebih' },
-          admin,
+          p6Admin,
           'p7-over-01',
         )
       ).status,
@@ -1595,7 +2114,7 @@ try {
         clockApi(
           '/stock/usage',
           { materialId: gula.body.id, quantity: 500, reason: 'Rebut saldo' },
-          admin,
+          p6Admin,
           `p7-contest-0${i + 1}`,
         ),
       ),
@@ -1606,7 +2125,7 @@ try {
     const history = await clockApi(
       `/stock?materialId=${gula.body.id}`,
       undefined,
-      admin,
+      p6Admin,
     );
     assert.equal(history.status, 200);
     assert.deepEqual(
@@ -1625,7 +2144,7 @@ try {
     await assert.rejects(
       db.query(
         'INSERT INTO "StockLedger" (id, "materialId", kind, "deltaMicros", "occurredAt", "recordedAt", "recordedBy") VALUES (gen_random_uuid()::text, $1, \'usage\', 5, now(), now(), $2)',
-        [gula.body.id, (await clockApi('/auth/me', undefined, admin)).body.id],
+        [gula.body.id, (await clockApi('/auth/me', undefined, p6Admin)).body.id],
       ),
     );
     console.log('PASS usage/waste/adjustment history, non-negative incl. contention');
@@ -1641,7 +2160,7 @@ try {
     );
     assert.equal(
       (
-        await clockApi('/purchases', purchaseInput, admin, 'p7-rollback-01')
+        await clockApi('/purchases', purchaseInput, p6Admin, 'p7-rollback-01')
       ).status,
       500,
     );
@@ -1661,7 +2180,7 @@ try {
     const wasteCorrection = await clockApi(
       `/stock/ledger/${wasteEntryId}/correct`,
       { delta: 50, reason: 'Rusak ternyata masih layak' },
-      admin,
+      p6Admin,
       'p7-correct-mutation-01',
     );
     assert.equal(wasteCorrection.status, 200, JSON.stringify(wasteCorrection.body));
@@ -1670,7 +2189,7 @@ try {
     const afterCorrection = await clockApi(
       `/stock?materialId=${gula.body.id}`,
       undefined,
-      admin,
+      p6Admin,
     );
     const correctionEntry = afterCorrection.body.items.find(
       (row) => row.correctsId === wasteEntryId,
@@ -1684,7 +2203,7 @@ try {
         await clockApi(
           `/stock/ledger/${correctionEntry.id}/correct`,
           { delta: -1, reason: 'Ganda' },
-          admin,
+          p6Admin,
           'p7-correct-correction-01',
         )
       ).status,
@@ -1702,7 +2221,7 @@ try {
         await clockApi(
           `/stock/ledger/${wasteEntryId}/correct`,
           { delta: -5000, reason: 'Saldo jadi negatif' },
-          admin,
+          p6Admin,
           'p7-correct-negative-01',
         )
       ).status,
@@ -1726,7 +2245,7 @@ try {
         ],
         reason: 'Ternyata 800 gram',
       },
-      admin,
+      p6Admin,
       'p7-correct-purchase-01',
     );
     assert.equal(corrected.status, 200, JSON.stringify(corrected.body));
@@ -1744,7 +2263,7 @@ try {
             ],
             reason: 'Ternyata 800 gram',
           },
-          admin,
+          p6Admin,
           'p7-correct-purchase-01',
         ),
       ),
@@ -1765,7 +2284,7 @@ try {
         await clockApi(
           `/purchases/${purchase.body.id}/correct`,
           { items: purchaseInput.items, reason: 'Ganda' },
-          admin,
+          p6Admin,
           'p7-correct-purchase-02',
         )
       ).status,
@@ -1782,14 +2301,14 @@ try {
           { materialId: gula.body.id, name: 'Gula P7', quantity: 100, cost: 15000 },
         ],
       },
-      admin,
+      p6Admin,
       'p7-purchase-cup-01',
     );
     assert.equal(cupBuy.status, 200, JSON.stringify(cupBuy.body));
     const cupUse = await clockApi(
       '/stock/usage',
       { materialId: cup.body.id, quantity: 4, reason: 'Pakai cup' },
-      admin,
+      p6Admin,
       'p7-usage-cup-01',
     );
     assert.equal(cupUse.status, 200);
@@ -1811,7 +2330,7 @@ try {
             ],
             reason: 'Saldo cup tidak cukup',
           },
-          admin,
+          p6Admin,
           'p7-correct-partial-01',
         )
       ).status,
@@ -1829,7 +2348,7 @@ try {
     const expense = await clockApi(
       '/expenses',
       { category: 'Listrik', amount: 50000, note: 'Token listrik' },
-      admin,
+      p6Admin,
       'p7-expense-01',
     );
     assert.equal(expense.status, 200, JSON.stringify(expense.body));
@@ -1838,7 +2357,7 @@ try {
         clockApi(
           '/expenses',
           { category: 'Listrik', amount: 50000, note: 'Token listrik' },
-          admin,
+          p6Admin,
           'p7-expense-01',
         ),
       ),
@@ -1847,7 +2366,7 @@ try {
     const expenseCorrection = await clockApi(
       `/expenses/${expense.body.id}/correct`,
       { category: 'Listrik', amount: 45000, note: 'Token listrik', reason: 'Salah tulis' },
-      admin,
+      p6Admin,
       'p7-correct-expense-01',
     );
     assert.equal(expenseCorrection.status, 200, JSON.stringify(expenseCorrection.body));
@@ -1867,16 +2386,16 @@ try {
         await clockApi(
           `/expenses/${expense.body.id}/correct`,
           { category: 'Listrik', amount: 1, reason: 'Ganda' },
-          admin,
+          p6Admin,
           'p7-correct-expense-02',
         )
       ).status,
       409,
     );
-    const expenseList = await clockApi('/expenses', undefined, admin);
+    const expenseList = await clockApi('/expenses', undefined, p6Admin);
     assert.equal(expenseList.body.items.length, 2);
     assert.equal(
-      (await clockApi('/expenses?page=0', undefined, admin)).status,
+      (await clockApi('/expenses?page=0', undefined, p6Admin)).status,
       400,
     );
     console.log('PASS expenses recorded, idempotent, corrected without hard-delete');
