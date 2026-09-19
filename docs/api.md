@@ -110,6 +110,32 @@ dengan jumlah unitPrice × quantity penjualan terkait.
 - Pencatatan tunai tidak mengurangi bahan otomatis (Q18); tidak ada backdate
   karyawan (Q12). Input susulan admin adalah bagian issue #10/#12 (P6).
 
+## QRIS dan bukti privat (#10–#12)
+
+`POST /sales` menerima field opsional `method: 'cash' | 'qris'` (default
+`cash`). Penjualan QRIS tercipta tanpa penerimaan: status `pending`,
+`receipt` null, tidak masuk penjualan lunas/penerimaan terkonfirmasi (Q10).
+Retry identik idempoten seperti tunai.
+
+- `POST /sales/:id/evidence` (Q27): body biner `image/jpeg`, `image/png`,
+  atau `image/webp`, maksimal 5 MB (413 bila lebih). Isi file divalidasi
+  (magic byte dan struktur) dan metadata lokasi dibuang sebelum disimpan.
+  File disimpan privat pada volume (`EVIDENCE_DIR`, default `uploads`),
+  tidak pernah tautan statis; unduhan lewat `GET /sales/:id/evidence`
+  dengan izin transaksi yang sama dengan detail penjualan (pemilik hari WIB
+  berjalan atau admin; di luar itu 404, bukan 403). Upload bukti saja tidak
+  melunasi penjualan. File ditulis sebelum referensi DB dibuat, jadi
+  kegagalan tulis tidak menghasilkan referensi bukti rusak.
+- `POST /sales/:id/confirm`: konfirmasi manual setelah pemeriksaan merchant.
+  Karyawan wajib mengunggah bukti dulu; admin tanpa bukti wajib menyertakan
+  `reason` (1..500) dan `merchantRef` (1..128), keduanya tersimpan pada
+  penerimaan. Penerimaan QRIS sebesar total backend tercipta atomik dengan
+  audit/idempotency; dua konfirmasi konkuren hanya menghasilkan satu
+  penerimaan (lock baris penjualan), konfirmasi kedua 409.
+
+Penghapusan otomatis bukti tidak ada pada MVP (Q27); kapasitas disk dipantau
+operator.
+
 ## Verifikasi
 
 `npm run test:api` membuat PostgreSQL container sintetis terisolasi dengan port

@@ -187,6 +187,7 @@ export class IdentityService {
     action: (
       tx: Prisma.TransactionClient,
       actorId: string,
+      account: { id: string; role: string },
     ) => Promise<{ result: Prisma.InputJsonValue; objectId: string }>,
     roles: readonly string[] = ['admin'],
   ) {
@@ -205,7 +206,7 @@ export class IdentityService {
           throw new ConflictException('Idempotency payload berbeda');
         return previous.result;
       }
-      const { result, objectId } = await action(tx, account.id);
+      const { result, objectId } = await action(tx, account.id, account);
       await tx.audit.create({
         data: {
           actorId: account.id,
