@@ -22,6 +22,9 @@ model Account {
   sessions     Session[]
   sales        Sale[]
   receipts     Receipt[]
+  purchases    Purchase[]
+  ledger       StockLedger[]
+  expenses     Expense[]
 }
 
 model Session {
@@ -58,6 +61,10 @@ model Material {
   unit          String
   quantityScale Int
   active        Boolean @default(true)
+  // Stok tersimpan dalam mikro satuan (10^-3) agar atomik & non-negatif di DB.
+  stock         Int @default(0)
+  items         PurchaseItem[]
+  ledger        StockLedger[]
 }
 
 model Product {
@@ -109,4 +116,70 @@ model LoginLimit {
   bucket  String @id
   startAt DateTime @db.Timestamptz(3)
   count   Int
+}
+
+// Pembelian sudah dibayar penuh dan diterima sekaligus (Q17); stok bertambah
+// tepat sekali lewat ledger atomik dalam transaksi yang sama. Koreksi
+// menghubungkan catatan lama/pengganti tanpa hard-delete (Q36).
+model Purchase {
+  id            String @id @default(uuid())
+  occurredAt    DateTime @db.Timestamptz(3)
+  recordedAt    DateTime @db.Timestamptz(3)
+  recordedBy    String
+  account       Account @relation(fields: [recordedBy], references: [id])
+  correctsId    String? @unique
+  corrects      Purchase? @relation("PurchaseCorrection", fields: [correctsId], references: [id])
+  correctedById String? @unique
+  correctedBy   Purchase? @relation("PurchaseCorrection")
+  items         PurchaseItem[]
+}
+
+model PurchaseItem {
+  id             String @id @default(uuid())
+  purchaseId     String
+  purchase       Purchase @relation(fields: [purchaseId], references: [id])
+  // materialId null = pembelian alat; tidak menyentuh stok bahan (Q8/Q17).
+  materialId     String?
+  material       Material? @relation(fields: [materialId], references: [id])
+  name           String
+  quantityMicros Int
+  unit           String?
+  cost           Int
+  @@index([purchaseId])
+}
+
+// Ledger mutasi stok: satu-satunya sumber riwayat perubahan stok; kolom
+// Material.stock selalu diperbarui bersama ledger dalam transaksi yang sama.
+model StockLedger {
+  id          String @id @default(uuid())
+  materialId  String
+  material    Material @relation(fields: [materialId], references: [id])
+  kind        String
+  deltaMicros Int
+  reason      String?
+  purchaseId  String?
+  correctsId  String? @unique
+  corrects    StockLedger? @relation("LedgerCorrection", fields: [correctsId], references: [id])
+  correctedBy StockLedger? @relation("LedgerCorrection")
+  occurredAt  DateTime @db.Timestamptz(3)
+  recordedAt  DateTime @db.Timestamptz(3)
+  recordedBy  String
+  account     Account @relation(fields: [recordedBy], references: [id])
+  @@index([materialId])
+}
+
+// Pengeluaran operasional terpisah dari pembelian dan refund (CONTEXT.md).
+model Expense {
+  id            String @id @default(uuid())
+  category      String
+  amount        Int
+  note          String?
+  occurredAt    DateTime @db.Timestamptz(3)
+  recordedAt    DateTime @db.Timestamptz(3)
+  recordedBy    String
+  account       Account @relation(fields: [recordedBy], references: [id])
+  correctsId    String? @unique
+  corrects      Expense? @relation("ExpenseCorrection", fields: [correctsId], references: [id])
+  correctedById String? @unique
+  correctedBy   Expense? @relation("ExpenseCorrection")
 }

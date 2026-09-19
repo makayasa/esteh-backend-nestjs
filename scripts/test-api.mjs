@@ -927,6 +927,469 @@ try {
       3,
     );
     console.log('PASS view sales: input time distinction, WIB midnight boundary');
+    // P7 (issues #20-#25): stok, pembelian, pengeluaran — khusus admin.
+    const gula = await clockApi(
+      '/materials',
+      { name: 'Gula P7', unit: 'gram', quantityScale: 3 },
+      admin,
+      'p7-material-gula-01',
+    );
+    assert.equal(gula.status, 200, JSON.stringify(gula.body));
+    const cup = await clockApi(
+      '/materials',
+      { name: 'Cup P7', unit: 'pcs', quantityScale: 0 },
+      admin,
+      'p7-material-cup-01',
+    );
+    assert.equal(cup.status, 200);
+    const stockOf = async (id) =>
+      (
+        await clockApi('/stock/balances', undefined, admin)
+      ).body.items.find((row) => row.id === id).stock;
+    // Issue #20: pembelian bahan menambah stok tepat sekali; alat tidak.
+    const purchaseInput = {
+      items: [
+        { materialId: gula.body.id, name: 'Gula P7', quantity: 1000, cost: 15000 },
+        { materialId: null, name: 'Cup sealer', quantity: 2, cost: 50000 },
+      ],
+    };
+    const purchase = await clockApi(
+      '/purchases',
+      purchaseInput,
+      admin,
+      'p7-purchase-01',
+    );
+    assert.equal(purchase.status, 200, JSON.stringify(purchase.body));
+    assert.equal(purchase.body.total, 65000);
+    assert.equal(purchase.body.items[0].quantityMicros, 1_000_000);
+    assert.equal(purchase.body.items[1].materialId, null);
+    assert.equal(purchase.body.occurredAt, new Date(time).toISOString());
+    assert.equal(await stockOf(gula.body.id), 1000);
+    // Retry konkuren idempoten: stok dan catatan tidak bertambah lagi.
+    const purchaseRetries = await Promise.all(
+      Array.from({ length: 3 }, () =>
+        clockApi('/purchases', purchaseInput, admin, 'p7-purchase-01'),
+      ),
+    );
+    for (const repeat of purchaseRetries) assert.deepEqual(repeat, purchase);
+    assert.equal(
+      (
+        await clockApi(
+          '/purchases',
+          { ...purchaseInput, items: [purchaseInput.items[0]] },
+          admin,
+          'p7-purchase-01',
+        )
+      ).status,
+      409,
+    );
+    assert.equal(
+      (await db.query('SELECT count(*)::int AS n FROM "Purchase"')).rows[0].n,
+      1,
+    );
+    assert.equal(
+      (
+        await db.query('SELECT count(*)::int AS n FROM "PurchaseItem"')
+      ).rows[0].n,
+      2,
+    );
+    assert.equal(
+      (
+        await db.query(
+          'SELECT count(*)::int AS n FROM "StockLedger" WHERE kind = \'purchase\'',
+        )
+      ).rows[0].n,
+      1,
+    );
+    // Tidak ada jalur penerimaan kedua: endpoint lain tidak ada, retry tidak
+    // menduplikasi ledger (cek di atas); karyawan tidak bisa apa pun (Q15).
+    assert.equal(
+      (await clockApi('/purchases/' + purchase.body.id + '/receive', {}, admin)).status,
+      404,
+    );
+    // Sesi employee/reader lama dicabut reset-password di bagian accounts;
+    // reader masih aktif — login baru untuk uji peran.
+    const p7Employee = (
+      await clockApi(
+        '/auth/login',
+        { username: 'reader', password: 'synthetic-reader-password-123' },
+        undefined,
+        'p7-employee-login-01',
+      )
+    ).body.token;
+    for (const [path, body] of [
+      ['/purchases', purchaseInput],
+      ['/stock/usage', { materialId: gula.body.id, quantity: 1, reason: 'x' }],
+      ['/stock/waste', { materialId: gula.body.id, quantity: 1, reason: 'x' }],
+      [
+        '/stock/adjustment',
+        { materialId: gula.body.id, delta: 1, reason: 'x' },
+      ],
+      ['/expenses', { category: 'Listrik', amount: 5000 }],
+      [
+        '/purchases/' + purchase.body.id + '/correct',
+        { items: purchaseInput.items, reason: 'koreksi' },
+      ],
+      [
+        '/stock/ledger/unknown/correct',
+        { delta: 1, reason: 'koreksi' },
+      ],
+    ])
+      assert.equal(
+        (await clockApi(path, { ...body }, p7Employee, 'p7-employee-01'))
+          .status,
+        403,
+      );
+    assert.equal(
+      (
+        await db.query('SELECT count(*)::int AS n FROM "Purchase"')
+      ).rows[0].n,
+      1,
+    );
+    assert.equal(
+      (await clockApi('/stock/balances', undefined, p7Employee)).status,
+      200,
+    );
+    console.log(
+      'PASS purchase adds stock exactly once, tool no stock, retries idempotent, employee denied',
+    );
+    // Issue #21: mutasi beralasan dengan saldo non-negatif atomik.
+    const usage = await clockApi(
+      '/stock/usage',
+      { materialId: gula.body.id, quantity: 300, reason: 'Pemakaian harian' },
+      admin,
+      'p7-usage-01',
+    );
+    assert.equal(usage.status, 200, JSON.stringify(usage.body));
+    assert.equal(usage.body.stock, 700);
+    assert.equal(usage.body.delta, -300);
+    const waste = await clockApi(
+      '/stock/waste',
+      { materialId: gula.body.id, quantity: 50, reason: 'Terbuang' },
+      admin,
+      'p7-waste-01',
+    );
+    assert.equal(waste.status, 200);
+    assert.equal(waste.body.stock, 650);
+    const adjustment = await clockApi(
+      '/stock/adjustment',
+      { materialId: gula.body.id, delta: 120, reason: 'Hitung fisik' },
+      admin,
+      'p7-adjust-01',
+    );
+    assert.equal(adjustment.status, 200);
+    assert.equal(adjustment.body.stock, 770);
+    assert.equal(
+      (
+        await clockApi(
+          '/stock/usage',
+          { materialId: gula.body.id, quantity: 2000, reason: 'Berlebih' },
+          admin,
+          'p7-over-01',
+        )
+      ).status,
+      400,
+    );
+    assert.equal(await stockOf(gula.body.id), 770);
+    // Dua request berebut saldo yang sama: satu sukses, satu ditolak.
+    const contested = await Promise.all(
+      Array.from({ length: 2 }, (_, i) =>
+        clockApi(
+          '/stock/usage',
+          { materialId: gula.body.id, quantity: 500, reason: 'Rebut saldo' },
+          admin,
+          `p7-contest-0${i + 1}`,
+        ),
+      ),
+    );
+    const statuses = contested.map((row) => row.status).sort();
+    assert.deepEqual(statuses, [200, 400]);
+    assert.equal(await stockOf(gula.body.id), 270);
+    const history = await clockApi(
+      `/stock?materialId=${gula.body.id}`,
+      undefined,
+      admin,
+    );
+    assert.equal(history.status, 200);
+    assert.deepEqual(
+      history.body.items.map((row) => row.kind).sort(),
+      ['adjustment', 'purchase', 'usage', 'usage', 'waste'],
+    );
+    assert.equal(history.body.material.stock, 270);
+    assert.equal(history.body.items[0].purchaseId, purchase.body.id);
+    // DB invariant: saldo stok dan ledger tidak bisa diviolasi langsung.
+    await assert.rejects(
+      db.query('UPDATE "Material" SET stock = -1 WHERE id = $1', [gula.body.id]),
+    );
+    await assert.rejects(
+      db.query(
+        'INSERT INTO "StockLedger" (id, "materialId", kind, "deltaMicros", "occurredAt", "recordedAt", "recordedBy") VALUES (gen_random_uuid()::text, $1, \'usage\', 5, now(), now(), $2)',
+        [gula.body.id, (await clockApi('/auth/me', undefined, admin)).body.id],
+      ),
+    );
+    console.log('PASS usage/waste/adjustment history, non-negative incl. contention');
+    // Kegagalan mutasi membatalkan seluruh pencatatan pembelian.
+    const beforePurchaseRollback = (
+      await db.query(
+        'SELECT (SELECT count(*) FROM "Purchase")::int AS p, (SELECT count(*) FROM "PurchaseItem")::int AS i, (SELECT count(*) FROM "StockLedger")::int AS l, (SELECT stock FROM "Material" WHERE id = $1)::int AS s',
+        [gula.body.id],
+      )
+    ).rows[0];
+    await db.query(
+      'CREATE TRIGGER reject_audit BEFORE INSERT ON "Audit" FOR EACH ROW EXECUTE FUNCTION reject_audit()',
+    );
+    assert.equal(
+      (
+        await clockApi('/purchases', purchaseInput, admin, 'p7-rollback-01')
+      ).status,
+      500,
+    );
+    await db.query('DROP TRIGGER reject_audit ON "Audit"');
+    const afterPurchaseRollback = (
+      await db.query(
+        'SELECT (SELECT count(*) FROM "Purchase")::int AS p, (SELECT count(*) FROM "PurchaseItem")::int AS i, (SELECT count(*) FROM "StockLedger")::int AS l, (SELECT stock FROM "Material" WHERE id = $1)::int AS s',
+        [gula.body.id],
+      )
+    ).rows[0];
+    assert.deepEqual(afterPurchaseRollback, beforePurchaseRollback);
+    console.log('PASS failed purchase rolls back records and stock atomically');
+    // Issue #22: koreksi mutasi berdelta dengan riwayat, tanpa hard-delete.
+    const wasteEntryId = history.body.items.find(
+      (row) => row.kind === 'waste',
+    ).id;
+    const wasteCorrection = await clockApi(
+      `/stock/ledger/${wasteEntryId}/correct`,
+      { delta: 50, reason: 'Rusak ternyata masih layak' },
+      admin,
+      'p7-correct-mutation-01',
+    );
+    assert.equal(wasteCorrection.status, 200, JSON.stringify(wasteCorrection.body));
+    assert.equal(wasteCorrection.body.delta, 50);
+    assert.equal(wasteCorrection.body.stock, 320);
+    const afterCorrection = await clockApi(
+      `/stock?materialId=${gula.body.id}`,
+      undefined,
+      admin,
+    );
+    const correctionEntry = afterCorrection.body.items.find(
+      (row) => row.correctsId === wasteEntryId,
+    );
+    assert.ok(correctionEntry);
+    assert.equal(correctionEntry.delta, 50);
+    assert.equal(correctionEntry.kind, 'correction');
+    // Koreksi tidak dapat dikoreksi lagi.
+    assert.equal(
+      (
+        await clockApi(
+          `/stock/ledger/${correctionEntry.id}/correct`,
+          { delta: -1, reason: 'Ganda' },
+          admin,
+          'p7-correct-correction-01',
+        )
+      ).status,
+      409,
+    );
+    // Koreksi yang membuat saldo negatif ditolak tanpa perubahan parsial.
+    const beforeNegative = (
+      await db.query(
+        'SELECT (SELECT count(*)::int FROM "StockLedger")::int AS l, (SELECT stock::int FROM "Material" WHERE id = $1)::int AS s',
+        [gula.body.id],
+      )
+    ).rows[0];
+    assert.equal(
+      (
+        await clockApi(
+          `/stock/ledger/${wasteEntryId}/correct`,
+          { delta: -5000, reason: 'Saldo jadi negatif' },
+          admin,
+          'p7-correct-negative-01',
+        )
+      ).status,
+      400,
+    );
+    const afterNegative = (
+      await db.query(
+        'SELECT (SELECT count(*)::int FROM "StockLedger")::int AS l, (SELECT stock::int FROM "Material" WHERE id = $1)::int AS s',
+        [gula.body.id],
+      )
+    ).rows[0];
+    assert.deepEqual(afterNegative, beforeNegative);
+    console.log('PASS mutation correction linked history, no hard-delete, guard');
+    // Issue #23: koreksi pembelian memperbarui stok + nilai bersama.
+    const corrected = await clockApi(
+      `/purchases/${purchase.body.id}/correct`,
+      {
+        items: [
+          { materialId: gula.body.id, name: 'Gula P7', quantity: 800, cost: 12000 },
+          { materialId: null, name: 'Cup sealer', quantity: 2, cost: 50000 },
+        ],
+        reason: 'Ternyata 800 gram',
+      },
+      admin,
+      'p7-correct-purchase-01',
+    );
+    assert.equal(corrected.status, 200, JSON.stringify(corrected.body));
+    assert.equal(corrected.body.total, 62000);
+    assert.equal(corrected.body.correctedPurchaseId, purchase.body.id);
+    assert.equal(await stockOf(gula.body.id), 120);
+    const purchaseCorrections = await Promise.all(
+      Array.from({ length: 2 }, () =>
+        clockApi(
+          `/purchases/${purchase.body.id}/correct`,
+          {
+            items: [
+              { materialId: gula.body.id, name: 'Gula P7', quantity: 800, cost: 12000 },
+              { materialId: null, name: 'Cup sealer', quantity: 2, cost: 50000 },
+            ],
+            reason: 'Ternyata 800 gram',
+          },
+          admin,
+          'p7-correct-purchase-01',
+        ),
+      ),
+    );
+    for (const repeat of purchaseCorrections)
+      assert.deepEqual(repeat, corrected);
+    assert.equal(
+      (
+        await db.query(
+          'SELECT "correctedById" FROM "Purchase" WHERE id = $1',
+          [purchase.body.id],
+        )
+      ).rows[0].correctedById,
+      corrected.body.id,
+    );
+    assert.equal(
+      (
+        await clockApi(
+          `/purchases/${purchase.body.id}/correct`,
+          { items: purchaseInput.items, reason: 'Ganda' },
+          admin,
+          'p7-correct-purchase-02',
+        )
+      ).status,
+      409,
+    );
+    // Koreksi parsial yang menabrak guard: seluruh transaksi dibatalkan.
+    // cup: stok 5 lalu dipakai 4 -> 1; koreksi mengurangi cup 2 dari stok 1
+    // (guard gagal) sehingga pengurang gula -90g ikut dibatalkan.
+    const cupBuy = await clockApi(
+      '/purchases',
+      {
+        items: [
+          { materialId: cup.body.id, name: 'Cup P7', quantity: 5, cost: 2500 },
+          { materialId: gula.body.id, name: 'Gula P7', quantity: 100, cost: 15000 },
+        ],
+      },
+      admin,
+      'p7-purchase-cup-01',
+    );
+    assert.equal(cupBuy.status, 200, JSON.stringify(cupBuy.body));
+    const cupUse = await clockApi(
+      '/stock/usage',
+      { materialId: cup.body.id, quantity: 4, reason: 'Pakai cup' },
+      admin,
+      'p7-usage-cup-01',
+    );
+    assert.equal(cupUse.status, 200);
+    assert.equal(cupUse.body.stock, 1);
+    const gulaBeforePartial = await stockOf(gula.body.id);
+    const beforePartial = (
+      await db.query(
+        'SELECT (SELECT count(*)::int FROM "Purchase")::int AS p, (SELECT count(*)::int FROM "PurchaseItem")::int AS i, (SELECT count(*)::int FROM "StockLedger")::int AS l',
+      )
+    ).rows[0];
+    assert.equal(
+      (
+        await clockApi(
+          `/purchases/${cupBuy.body.id}/correct`,
+          {
+            items: [
+              { materialId: cup.body.id, name: 'Cup P7', quantity: 3, cost: 1500 },
+              { materialId: gula.body.id, name: 'Gula P7', quantity: 10, cost: 1500 },
+            ],
+            reason: 'Saldo cup tidak cukup',
+          },
+          admin,
+          'p7-correct-partial-01',
+        )
+      ).status,
+      400,
+    );
+    const afterPartial = (
+      await db.query(
+        'SELECT (SELECT count(*)::int FROM "Purchase")::int AS p, (SELECT count(*)::int FROM "PurchaseItem")::int AS i, (SELECT count(*)::int FROM "StockLedger")::int AS l',
+      )
+    ).rows[0];
+    assert.deepEqual(afterPartial, beforePartial);
+    assert.equal(await stockOf(gula.body.id), gulaBeforePartial);
+    console.log('PASS purchase correction updates stock+value together, partial rejected');
+    // Issues #24-#25: pengeluaran operasional dan koreksinya.
+    const expense = await clockApi(
+      '/expenses',
+      { category: 'Listrik', amount: 50000, note: 'Token listrik' },
+      admin,
+      'p7-expense-01',
+    );
+    assert.equal(expense.status, 200, JSON.stringify(expense.body));
+    const expenseRetries = await Promise.all(
+      Array.from({ length: 2 }, () =>
+        clockApi(
+          '/expenses',
+          { category: 'Listrik', amount: 50000, note: 'Token listrik' },
+          admin,
+          'p7-expense-01',
+        ),
+      ),
+    );
+    for (const repeat of expenseRetries) assert.deepEqual(repeat, expense);
+    const expenseCorrection = await clockApi(
+      `/expenses/${expense.body.id}/correct`,
+      { category: 'Listrik', amount: 45000, note: 'Token listrik', reason: 'Salah tulis' },
+      admin,
+      'p7-correct-expense-01',
+    );
+    assert.equal(expenseCorrection.status, 200, JSON.stringify(expenseCorrection.body));
+    assert.equal(expenseCorrection.body.amount, 45000);
+    assert.equal(expenseCorrection.body.correctedExpenseId, expense.body.id);
+    assert.equal(
+      (
+        await db.query(
+          'SELECT "correctedById" FROM "Expense" WHERE id = $1',
+          [expense.body.id],
+        )
+      ).rows[0].correctedById,
+      expenseCorrection.body.id,
+    );
+    assert.equal(
+      (
+        await clockApi(
+          `/expenses/${expense.body.id}/correct`,
+          { category: 'Listrik', amount: 1, reason: 'Ganda' },
+          admin,
+          'p7-correct-expense-02',
+        )
+      ).status,
+      409,
+    );
+    const expenseList = await clockApi('/expenses', undefined, admin);
+    assert.equal(expenseList.body.items.length, 2);
+    assert.equal(
+      (await clockApi('/expenses?page=0', undefined, admin)).status,
+      400,
+    );
+    console.log('PASS expenses recorded, idempotent, corrected without hard-delete');
+    // Retur/refund pemasok bukan pembetulan data: tidak ada jalur koreksi
+    // yang mengubah nominal pembelian menjadi refund (P6 terpisah).
+    assert.equal(
+      (
+        await db.query(
+          'SELECT count(*)::int AS n FROM "StockLedger" WHERE kind = \'correction\' AND "purchaseId" IS NOT NULL AND "deltaMicros" > 0',
+        )
+      ).rows[0].n,
+      0,
+    );
+    console.log('PASS no supplier-return masquerading as stock correction');
   } finally {
     await app.close();
   }
