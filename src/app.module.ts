@@ -5,9 +5,16 @@ import { HealthModule } from './health/health.module.js';
 import { IdentityModule } from './identity/identity.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { SalesModule } from './sales/sales.module.js';
+import { PurchasingModule } from './purchasing/purchasing.module.js';
 
 @Module({
-  imports: [HealthModule, IdentityModule, CatalogModule, SalesModule],
+  imports: [
+    HealthModule,
+    IdentityModule,
+    CatalogModule,
+    SalesModule,
+    PurchasingModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

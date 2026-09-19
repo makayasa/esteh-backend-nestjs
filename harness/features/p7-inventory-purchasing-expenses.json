@@ -3,8 +3,8 @@
   "priority": 17,
   "area": "P7",
   "title": "P7 — Stok, Pembelian, dan Pengeluaran",
-  "status": "not_started",
-  "branch": null,
+  "status": "in_progress",
+  "branch": "p7-inventory-purchasing-expenses",
   "depends_on": [
     "p3-catalog"
   ],
@@ -13,5 +13,14 @@
     "npm run verify",
     "Uji pembelian-stock atomik, retry, stok non-negatif konkuren, koreksi dan role admin sesuai P7."
   ],
-  "evidence": []
+  "evidence": [
+    {
+      "path": "harness/progress/2026-09-19-p7-inventory-purchasing.md",
+      "summary": "test:api 7 kelompok P7 lulus di postgres nyata: pembelian atomik/idempoten/retry, kontensi saldo non-negatif, rollback pembelian, koreksi tanpa hard-delete, karyawan 403. verify gagal hanya karena p3-catalog blocked."
+    },
+    {
+      "path": "harness/progress/2026-09-19-p7-inventory-purchasing.md",
+      "summary": "Merge main (P5) resolved di test-api.mjs; test:api 19 kelompok PASS, gate non-dependency lulus; verify tetap tertahan p3-catalog blocked."
+    }
+  ]
 }
