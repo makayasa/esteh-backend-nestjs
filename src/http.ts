@@ -6,7 +6,7 @@ import {
   INestApplication,
 } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { json } from 'express';
+import { json, raw } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { IdentityService } from './identity/identity.service.js';
 
@@ -44,6 +44,13 @@ class SafeErrors implements ExceptionFilter {
 
 export function configureHttp(app: INestApplication) {
   app.use(json({ limit: '16kb' }));
+  // P5/Q27: bukti QRIS berupa body biner image/*, maks 5 MB (413 bila lebih).
+  app.use(
+    raw({
+      type: ['image/jpeg', 'image/png', 'image/webp'],
+      limit: 5 * 1024 * 1024,
+    }),
+  );
   app.useGlobalFilters(new SafeErrors());
   const identity = app.get(IdentityService);
   app.use('/docs', (req: Request, res: Response, next: NextFunction) => {
@@ -116,6 +123,11 @@ export function configureHttp(app: INestApplication) {
           },
         },
       },
+      method: { ...string, enum: ['cash', 'qris'] },
+    },
+    '/sales/{id}/confirm': {
+      reason: { ...string, minLength: 1, maxLength: 500 },
+      merchantRef: { ...string, minLength: 1, maxLength: 128 },
     },
   };
   for (const [path, properties] of Object.entries(bodies)) {

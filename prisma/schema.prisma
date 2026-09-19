@@ -78,14 +78,21 @@ model Product {
 
 // Penjualan: harga snapshot pada saat kejadian; tidak mengikuti harga katalog.
 // occurredAt = waktu kejadian; recordedAt/recordedBy = waktu & pelaku input (Q12).
+// method 'qris': pending sampai konfirmasi (Q10); bukti privat di volume (Q27).
 model Sale {
-  id         String @id @default(uuid())
-  occurredAt DateTime @db.Timestamptz(3)
-  recordedAt DateTime @db.Timestamptz(3)
-  recordedBy String
-  account    Account @relation(fields: [recordedBy], references: [id])
-  items      SaleItem[]
-  receipt    Receipt?
+  id           String @id @default(uuid())
+  occurredAt   DateTime @db.Timestamptz(3)
+  recordedAt   DateTime @db.Timestamptz(3)
+  recordedBy   String
+  account      Account @relation(fields: [recordedBy], references: [id])
+  method       String @default("cash")
+  evidencePath String?
+  evidenceMime String?
+  evidenceSize Int?
+  evidenceAt   DateTime? @db.Timestamptz(3)
+  evidenceBy   String?
+  items        SaleItem[]
+  receipt      Receipt?
 }
 
 model SaleItem {
@@ -102,14 +109,17 @@ model SaleItem {
 
 // Penerimaan Pembayaran: satu per penjualan, nominal dihitung backend.
 model Receipt {
-  id         String @id @default(uuid())
-  saleId     String @unique
-  sale       Sale @relation(fields: [saleId], references: [id])
-  method     String
-  amount     Int
-  receivedAt DateTime @db.Timestamptz(3)
-  receivedBy String
-  account    Account @relation(fields: [receivedBy], references: [id])
+  id            String @id @default(uuid())
+  saleId        String @unique
+  sale          Sale @relation(fields: [saleId], references: [id])
+  method        String
+  amount        Int
+  receivedAt    DateTime @db.Timestamptz(3)
+  receivedBy    String
+  account       Account @relation(fields: [receivedBy], references: [id])
+  // Q26: referensi merchant/alasan hanya untuk konfirmasi QRIS tanpa bukti.
+  merchantRef   String?
+  confirmReason String?
 }
 
 model LoginLimit {

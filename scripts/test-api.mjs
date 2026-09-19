@@ -15,6 +15,7 @@ const run = (command, args, options = {}) => {
   return result.stdout.trim();
 };
 let server;
+let restartSaleId;
 let db;
 try {
   run('docker', [
@@ -927,6 +928,503 @@ try {
       3,
     );
     console.log('PASS view sales: input time distinction, WIB midnight boundary');
+    // P5 #10/#11/#12: QRIS pending, bukti privat, konfirmasi + pengecualian admin.
+    const { mkdtemp, chmod, rm } = await import('node:fs/promises');
+    const os = await import('node:os');
+    const path = (await import('node:path')).default;
+    const evidenceDir = await mkdtemp(path.join(os.tmpdir(), 'esteh-evidence-'));
+    env.EVIDENCE_DIR = evidenceDir;
+    Object.assign(process.env, { EVIDENCE_DIR: evidenceDir });
+    const rawApi = async (path2, buffer, mime, token, key) => {
+      const res = await fetch(`${await app.getUrl()}${path2}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': mime,
+          'Idempotency-Key': key,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: buffer,
+      });
+      const text = await res.text();
+      try {
+        return { status: res.status, body: JSON.parse(text) };
+      } catch {
+        return { status: res.status, body: text };
+      }
+    };
+    const receiptCount = async () =>
+      (
+        await db.query('SELECT count(*)::int AS n FROM "Receipt"')
+      ).rows[0].n;
+    const receiptsBeforeQris = await receiptCount();
+    const qrisSale = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 1 }], method: 'qris' },
+      readerToken,
+      'sale-qris-01',
+    );
+    assert.equal(qrisSale.status, 200, JSON.stringify(qrisSale.body));
+    assert.equal(qrisSale.body.method, 'qris');
+    assert.equal(qrisSale.body.status, 'pending');
+    assert.equal(qrisSale.body.receipt, null);
+    assert.equal(qrisSale.body.total, 6500); // manis sudah direprice 6500
+    assert.equal(await receiptCount(), receiptsBeforeQris);
+    // Pending tidak masuk penjualan lunas; retry idempoten tetap satu penjualan.
+    const qrisRetry = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 1 }], method: 'qris' },
+      readerToken,
+      'sale-qris-01',
+    );
+    assert.deepEqual(qrisRetry.body, qrisSale.body);
+    assert.equal(
+      (
+        await db.query(
+          'SELECT count(*)::int AS n FROM "Sale" WHERE method = $1',
+          ['qris'],
+        )
+      ).rows[0].n,
+      1,
+    );
+    const otherEmployee = {
+      username: 'otherstaff',
+      password: 'synthetic-otherstaff-password-123',
+      role: 'employee',
+    };
+    await clockApi('/accounts', otherEmployee, admin, 'otherstaff-create-01');
+    const otherToken = (
+      await clockApi(
+        '/auth/login',
+        {
+          username: otherEmployee.username,
+          password: otherEmployee.password,
+        },
+        undefined,
+        'otherstaff-login-01',
+      )
+    ).body.token;
+    // #11: user lain tidak bisa menebak ID bukti/transaksi; 404 tanpa bocor.
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${qrisSale.body.id}/evidence`,
+          undefined,
+          otherToken,
+        )
+      ).status,
+      404,
+    );
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${qrisSale.body.id}/confirm`,
+          {},
+          otherToken,
+          'confirm-forged-01',
+        )
+      ).status,
+      404,
+    );
+    assert.equal(
+      (
+        await clockApi(`/sales/${qrisSale.body.id}/evidence`, undefined, admin)
+      ).status,
+      404,
+    );
+    // #12: karyawan tidak dapat mengonfirmasi tanpa foto.
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${qrisSale.body.id}/confirm`,
+          {},
+          readerToken,
+          'confirm-noevidence-01',
+        )
+      ).status,
+      400,
+    );
+    // #12/Q26: pengecualian admin tanpa foto wajib alasan + referensi merchant.
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${qrisSale.body.id}/confirm`,
+          {},
+          admin,
+          'confirm-admin-nofields-01',
+        )
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${qrisSale.body.id}/confirm`,
+          { reason: 'QRIS terverifikasi merchant', merchantRef: 'QR-0001' },
+          readerToken,
+          'confirm-employee-override-01',
+        )
+      ).status,
+      400,
+    );
+    const adminConfirm = await clockApi(
+      `/sales/${qrisSale.body.id}/confirm`,
+      { reason: 'QRIS terverifikasi merchant', merchantRef: 'QR-0001' },
+      admin,
+      'confirm-admin-01',
+    );
+    assert.equal(adminConfirm.status, 200, JSON.stringify(adminConfirm.body));
+    assert.equal(adminConfirm.body.status, 'paid');
+    assert.equal(adminConfirm.body.receipt.method, 'qris');
+    assert.equal(adminConfirm.body.receipt.amount, 6500);
+    const adminConfirmRetry = await clockApi(
+      `/sales/${qrisSale.body.id}/confirm`,
+      { reason: 'QRIS terverifikasi merchant', merchantRef: 'QR-0001' },
+      admin,
+      'confirm-admin-01',
+    );
+    assert.deepEqual(adminConfirmRetry.body, adminConfirm.body);
+    assert.equal(await receiptCount(), receiptsBeforeQris + 1);
+    // Q26: alasan dan referensi merchant tersimpan pada penerimaan.
+    assert.deepEqual(
+      (
+        await db.query(
+          'SELECT "merchantRef", "confirmReason" FROM "Receipt" WHERE "saleId" = $1',
+          [qrisSale.body.id],
+        )
+      ).rows[0],
+      {
+        merchantRef: 'QR-0001',
+        confirmReason: 'QRIS terverifikasi merchant',
+      },
+    );
+    // Sudah lunas: konfirmasi kedua dan upload bukti ditolak.
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${qrisSale.body.id}/confirm`,
+          {},
+          admin,
+          'confirm-admin-repeat-02',
+        )
+      ).status,
+      409,
+    );
+    const jpeg = Buffer.concat([
+      Buffer.from([0xff, 0xd8, 0xff, 0xe1, 0x00, 0x0b]),
+      Buffer.from('Exif\0\0GPS'),
+      Buffer.from([0xff, 0xda, 0x00, 0x02, 0x00, 0xff, 0xd9]),
+    ]);
+    // Penjualan tunai & QRIS terbaru dalam hari WIB berjalan untuk uji bukti.
+    const recentCash = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 1 }] },
+      readerToken,
+      'sale-recent-cash-01',
+    );
+    assert.equal(recentCash.status, 200);
+    const adminQris = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 1 }], method: 'qris' },
+      admin,
+      'sale-qris-admin-01',
+    );
+    assert.equal(adminQris.status, 200);
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from([0, 0, 0, 13]),
+      Buffer.from('IHDR'),
+      Buffer.alloc(17),
+      Buffer.from([0, 0, 0, 3]),
+      Buffer.from('eXIfGPS'),
+      Buffer.alloc(4),
+      Buffer.from([0, 0, 0, 0]),
+      Buffer.from('IEND'),
+      Buffer.alloc(4),
+    ]);
+    const webpChunk = (fourcc, data) =>
+      Buffer.concat([
+        Buffer.from(fourcc),
+        (() => {
+          const size = Buffer.alloc(4);
+          size.writeUInt32LE(data.length);
+          return size;
+        })(),
+        data,
+        data.length % 2 ? Buffer.from([0]) : Buffer.alloc(0),
+      ]);
+    const webpBody = Buffer.concat([
+      Buffer.from('WEBP'),
+      webpChunk('VP8 ', Buffer.from('DAT')),
+      webpChunk('EXIF', Buffer.from('GPS')),
+    ]);
+    const webp = Buffer.concat([
+      Buffer.from('RIFF'),
+      (() => {
+        const size = Buffer.alloc(4);
+        size.writeUInt32LE(webpBody.length);
+        return size;
+      })(),
+      webpBody,
+    ]);
+    // #10: upload saja tidak melunasi; #11 tipe/isi invalid ditolak.
+    for (const [mime, bytes, label] of [
+      ['image/jpeg', Buffer.from('bukan gambar'), 'text-as-jpeg'],
+      ['image/png', jpeg, 'jpeg-as-png'],
+      ['image/gif', png, 'gif-content-type'],
+    ])
+      assert.equal(
+        (
+          await rawApi(
+            `/sales/${qrisSale.body.id}/evidence`,
+            bytes,
+            mime,
+            readerToken,
+            `evidence-invalid-${label}`,
+          )
+        ).status,
+        400,
+        label,
+      );
+    assert.equal(
+      (
+        await rawApi(
+          `/sales/${recentCash.body.id}/evidence`,
+          png,
+          'image/png',
+          readerToken,
+          'evidence-on-cash-01',
+        )
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await rawApi(
+          `/sales/${qrisSale.body.id}/evidence`,
+          Buffer.alloc(5 * 1024 * 1024 + 1, 0x89),
+          'image/png',
+          readerToken,
+          'evidence-oversize-01',
+        )
+      ).status,
+      413,
+    );
+    // Kegagalan tulis file tidak meninggalkan referensi bukti di DB.
+    await chmod(evidenceDir, 0o500);
+    const failedWrite = await rawApi(
+      `/sales/${adminQris.body.id}/evidence`,
+      png,
+      'image/png',
+      admin,
+      'evidence-write-fail-01',
+    );
+    assert.equal(failedWrite.status, 500);
+    assert.equal(
+      (
+        await db.query(
+          'SELECT "evidencePath" FROM "Sale" WHERE id = $1',
+          [adminQris.body.id],
+        )
+      ).rows[0].evidencePath,
+      null,
+    );
+    await chmod(evidenceDir, 0o700);
+    // Retry dengan key yang sama setelah kegagalan tidak dianggap replay.
+    const photoUpload = await rawApi(
+      `/sales/${adminQris.body.id}/evidence`,
+      png,
+      'image/png',
+      admin,
+      'evidence-write-fail-01',
+    );
+    assert.equal(photoUpload.status, 200, JSON.stringify(photoUpload.body));
+    assert.equal(photoUpload.body.evidence.mime, 'image/png');
+    const strippedPng = Buffer.concat([
+      png.subarray(0, 8),
+      png.subarray(8, 8 + 25), // IHDR tetap
+      png.subarray(png.length - 12), // IEND
+    ]);
+    assert.equal(photoUpload.body.evidence.size, strippedPng.length);
+    // Metadata lokasi dibuang; retry key sama/payload beda 409.
+    const jpegUpload = await rawApi(
+      `/sales/${adminQris.body.id}/evidence`,
+      jpeg,
+      'image/jpeg',
+      admin,
+      'evidence-write-fail-01',
+    );
+    assert.equal(jpegUpload.status, 409);
+    const webpUpload = await rawApi(
+      `/sales/${adminQris.body.id}/evidence`,
+      webp,
+      'image/webp',
+      admin,
+      'evidence-webp-01',
+    );
+    assert.equal(webpUpload.status, 200, JSON.stringify(webpUpload.body));
+    // Retry identik upload mengembalikan hasil sama tanpa efek ganda.
+    const webpRetry = await rawApi(
+      `/sales/${adminQris.body.id}/evidence`,
+      webp,
+      'image/webp',
+      admin,
+      'evidence-webp-01',
+    );
+    assert.deepEqual(webpRetry.body, webpUpload.body);
+    const webpAudit = (
+      await db.query(
+        'SELECT count(*)::int AS n FROM "Audit" WHERE action = $1',
+        ['sale.evidence.upload'],
+      )
+    ).rows[0].n;
+    assert.equal(webpAudit, 2); // photoUpload + webpUpload
+    // Upload ulang tiap format, lalu unduh: metadata lokasi dibuang, byte hasil
+    // sama dengan versi bersih yang diharapkan.
+    const strippedJpeg = Buffer.concat([
+      Buffer.from([0xff, 0xd8]),
+      Buffer.from([0xff, 0xda, 0x00, 0x02, 0x00, 0xff, 0xd9]),
+    ]);
+    const strippedWebp = Buffer.concat([
+      Buffer.from('RIFF'),
+      (() => {
+        const size = Buffer.alloc(4);
+        size.writeUInt32LE(16);
+        return size;
+      })(),
+      Buffer.from('WEBP'),
+      webpChunk('VP8 ', Buffer.from('DAT')),
+    ]);
+    const stripCases = [
+      ['evidence-jpeg-01', jpeg, 'image/jpeg', strippedJpeg],
+      ['evidence-strip-image/png', png, 'image/png', strippedPng],
+      [
+        'evidence-strip-image/webp',
+        webp,
+        'image/webp',
+        strippedWebp,
+      ],
+    ];
+    for (const [key, original, mime, expected] of stripCases) {
+      const reupload = await rawApi(
+        `/sales/${adminQris.body.id}/evidence`,
+        original,
+        mime,
+        admin,
+        key,
+      );
+      assert.equal(reupload.status, 200, JSON.stringify(reupload.body));
+      assert.equal(reupload.body.evidence.size, expected.length, mime);
+      const download = await fetch(
+        `${await app.getUrl()}/sales/${adminQris.body.id}/evidence`,
+        { headers: { Authorization: `Bearer ${admin}` } },
+      );
+      assert.equal(download.status, 200);
+      assert.equal(download.headers.get('content-type'), mime);
+      assert(
+        Buffer.from(await download.arrayBuffer()).equals(expected),
+        mime,
+      );
+    }
+    // Upload bukti saja tidak melunasi: adminQris tetap pending tanpa receipt.
+    const stillPending = await clockApi(
+      `/sales/${adminQris.body.id}`,
+      undefined,
+      admin,
+    );
+    assert.equal(stillPending.body.status, 'pending');
+    assert.equal(stillPending.body.receipt, null);
+    // Batal: adminSale cash sudah lunas; pakai penjualan QRIS kedua untuk foto.
+    const photoSale = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 2 }], method: 'qris' },
+      readerToken,
+      'sale-qris-photo-01',
+    );
+    assert.equal(photoSale.status, 200);
+    const photo = await rawApi(
+      `/sales/${photoSale.body.id}/evidence`,
+      png,
+      'image/png',
+      readerToken,
+      'evidence-photo-01',
+    );
+    assert.equal(photo.status, 200, JSON.stringify(photo.body));
+    assert.equal(photo.body.evidence.mime, 'image/png');
+    // Upload bukti saja tidak melunasi: jumlah receipt masih +1 dari adminConfirm
+    // (recentCash tunai menambah satu, bukan dari upload QRIS).
+    assert.equal(
+      (
+        await db.query('SELECT count(*)::int AS n FROM "Receipt"')
+      ).rows[0].n,
+      receiptsBeforeQris + 2,
+    );
+    // Karyawan (bukan pemilik) tetap 404 pada bukti penjualan ini.
+    assert.equal(
+      (
+        await clockApi(
+          `/sales/${photoSale.body.id}/evidence`,
+          undefined,
+          otherToken,
+        )
+      ).status,
+      404,
+    );
+    // Konfirmasi karyawan dengan bukti: karyawan pemilik boleh.
+    const employeeConfirm = await clockApi(
+      `/sales/${photoSale.body.id}/confirm`,
+      {},
+      readerToken,
+      'confirm-photo-01',
+    );
+    assert.equal(
+      employeeConfirm.status,
+      200,
+      JSON.stringify(employeeConfirm.body),
+    );
+    assert.equal(employeeConfirm.body.status, 'paid');
+    assert.equal(employeeConfirm.body.receipt.method, 'qris');
+    assert.equal(employeeConfirm.body.receipt.amount, 13000);
+    // Dua konfirmasi konkuren (key berbeda) hanya satu efek: 200 + 409.
+    const raceSale = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 1 }], method: 'qris' },
+      readerToken,
+      'sale-qris-race-01',
+    );
+    assert.equal(raceSale.status, 200);
+    const raceUpload = await rawApi(
+      `/sales/${raceSale.body.id}/evidence`,
+      jpeg,
+      'image/jpeg',
+      readerToken,
+      'evidence-race-01',
+    );
+    assert.equal(raceUpload.status, 200, JSON.stringify(raceUpload.body));
+    const raceReceiptsBefore = await receiptCount();
+    const race = await Promise.all([
+      clockApi(
+        `/sales/${raceSale.body.id}/confirm`,
+        {},
+        readerToken,
+        'confirm-race-a-01',
+      ),
+      clockApi(
+        `/sales/${raceSale.body.id}/confirm`,
+        { reason: 'admin race', merchantRef: 'QR-RACE' },
+        admin,
+        'confirm-race-b-01',
+      ),
+    ]);
+    assert.deepEqual(
+      race.map((row) => row.status).sort(),
+      [200, 409],
+      JSON.stringify(race),
+    );
+    assert.equal(await receiptCount(), raceReceiptsBefore + 1);
+    restartSaleId = adminQris.body.id;
+    console.log(
+      'PASS QRIS pending/evidence privacy/sanitization/confirm/exception/race',
+    );
     // P7 (issues #20-#25): stok, pembelian, pengeluaran — khusus admin.
     const gula = await clockApi(
       '/materials',
@@ -1393,6 +1891,52 @@ try {
   } finally {
     await app.close();
   }
+  // P5: bukti tetap ada setelah restart proses server (file di volume, DB di
+  // PostgreSQL). Server lama dimatikan, proses baru mengarah ke EVIDENCE_DIR sama.
+  server.kill('SIGTERM');
+  for (let i = 0; i < 100; i++) {
+    if (server.exitCode !== null) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  server = spawn('node', ['dist/main.js'], {
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  server.stdout.on('data', (chunk) => {
+    logs += chunk;
+  });
+  server.stderr.on('data', (chunk) => {
+    logs += chunk;
+  });
+  for (let i = 0; ; i++) {
+    try {
+      await fetch(`http://127.0.0.1:${appPort}/health`);
+      break;
+    } catch {
+      if (i === 100) throw new Error(`App restart failed: ${logs}`);
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+  const restartToken = (
+    await api('/auth/login', credentials, undefined, 'restart-login-01')
+  ).body.token;
+  const persistedEvidence = await fetch(
+    `http://127.0.0.1:${appPort}/sales/${restartSaleId}/evidence`,
+    { headers: { Authorization: `Bearer ${restartToken}` } },
+  );
+  assert.equal(persistedEvidence.status, 200);
+  assert.equal(persistedEvidence.headers.get('content-type'), 'image/webp');
+  const persistedSale = await api(
+    `/sales/${restartSaleId}`,
+    undefined,
+    restartToken,
+  );
+  assert.equal(persistedSale.body.status, 'pending');
+  assert.equal(persistedSale.body.evidence.mime, 'image/webp');
+  await (
+    await import('node:fs/promises')
+  ).rm(env.EVIDENCE_DIR, { recursive: true, force: true });
+  console.log('PASS evidence persists across process restart');
 } finally {
   server?.kill('SIGTERM');
   await db?.end();
