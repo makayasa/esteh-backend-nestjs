@@ -41,6 +41,13 @@ p4 (blocked/evidence), p3/p2 (alasan blocked diperbarui), progress baru.
 - npm audit: 9 advisory (Prisma/mau) seperti sebelumnya; tanpa perubahan.
 - .env pengguna tidak diubah; tidak ada secret dalam evidence.
 
+## Push
+
+Di-push pengguna sesi ini: commit 6111c04 (P0–P4 + harness) dan merge
+commit ea43bfc (skeleton remote LICENSE/README/.gitignore) ke origin/main.
+Diff gate `npm run harness:check -- --base ff40603` lulus pasca-push.
+GitHub #6/#8 masih OPEN; tutup setelah keputusan agregat bila diminta.
+
 ## Next Best Step
 
 Manager putuskan status agregat P1–P3 (bukti domain kini lengkap untuk

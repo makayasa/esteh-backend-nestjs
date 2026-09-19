@@ -1,6 +1,7 @@
 # Handoff — issues-03-07
 
-- Branch main, belum commit; file repo masih untracked.
+- Branch main; sudah di-commit dan di-push ke origin/main (6111c04 + merge
+  ea43bfc). Diff gate `npm run harness:check -- --base ff40603` lulus.
 - Features: issue-03-login, issue-04-session, issue-05-accounts,
   issue-06-products, issue-07-materials passing. Aggregate P1/P2/P3 blocked
   (bukti domain lengkap; sertifikasi menunggu keputusan pengguna).
