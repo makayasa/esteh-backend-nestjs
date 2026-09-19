@@ -1,6 +1,7 @@
 # Handoff — issue-09-view-sales (GitHub #9 / P4)
 
-- Branch issue-09-view-sales (di-push, PR dibuka); feature issue-09-view-sales.
+- Branch issue-09-view-sales: PR #31 di-merge pengguna ke main (2e121d3);
+  tracker/index/handoff diperbarui pasca-merge.
 - Status blocked: seluruh AC terbukti, `passing` tertahan dependensi
   p4-cash-sales (agregat P1/P2/P3, keputusan pengguna).
 - Plan: docs/plans/mvp-implementation-plan.md#p4--penjualan-tunai-end-to-end;
