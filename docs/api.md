@@ -99,7 +99,14 @@ dengan jumlah unitPrice × quantity penjualan terkait.
 - `GET /sales/:id`: detail dengan snapshot item dan penerimaan; akses di luar
   izin/hari berjalan menghasilkan 404, bukan 403, agar tidak membocorkan ID.
 - Retry identik (key sama, payload sama) mengembalikan penjualan yang sama;
-  payload berbeda dengan key sama 409. OccurredAt/receivedAt dari server.
+  payload berbeda dengan key sama 409. OccurredAt/recordedAt/receivedAt dari
+  server. Penjualan normal: waktu kejadian = waktu input; pelaku input adalah
+  petugas yang mencatat (Q12). Input susulan admin (P6) memisahkan keduanya.
+- Detail respons: `{ id, occurredAt, recordedAt, recordedBy, items, total,
+  receipt }`. occurredAt = waktu kejadian; recordedAt/recordedBy = waktu dan
+  pelaku input/pencatatan.
+- Pergantian hari WIB diuji dengan waktu terkendali pada 00.00 WIB: penjualan
+  sebelum tengah malam keluar dari akses karyawan tepat setelah berganti hari.
 - Pencatatan tunai tidak mengurangi bahan otomatis (Q18); tidak ada backdate
   karyawan (Q12). Input susulan admin adalah bagian issue #10/#12 (P6).
 

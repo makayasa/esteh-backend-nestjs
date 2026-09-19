@@ -1,0 +1,21 @@
+{
+  "id": "issue-09-view-sales",
+  "priority": 16,
+  "area": "P4",
+  "title": "GitHub #9 — Lihat Penjualan sesuai pemilik dan hari WIB",
+  "status": "blocked",
+  "blocked_reason": "Seluruh AC #9 terbukti pada PostgreSQL nyata (izin admin/petugas, 404 lintas-petugas, recordedAt vs occurredAt, pergantian hari WIB dengan waktu terkendali); status passing menunggu dependensi p4-cash-sales yang tertahan agregat P1/P2/P3 menunggu keputusan pengguna.",
+  "branch": "issue-09-view-sales",
+  "depends_on": ["p4-cash-sales"],
+  "spec": "docs/plans/mvp-implementation-plan.md#p4--penjualan-tunai-end-to-end",
+  "verification": [
+    "npm run verify",
+    "Uji izin lihat penjualan (admin semua, karyawan milik sendiri hari berjalan), 404 lintas-petugas, dan batas pergantian hari WIB dengan waktu terkendali."
+  ],
+  "evidence": [
+    {
+      "path": "harness/progress/2026-09-19-issue-09-view-sales.md",
+      "summary": "test:api exit 0: list/detail per izin, 404 tanpa bocor, recordedAt terpisah, boundary 23:59:59→00:00:01 WIB; verify exit 0."
+    }
+  ]
+}

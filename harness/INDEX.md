@@ -2,7 +2,7 @@
 
 Regenerasi: `npm run harness:index`. Sumber kebenaran: shard features/progress/handoffs.
 
-## Features (16)
+## Features (17)
 
 | Prio | Status | Feature | Branch | Evidence |
 | --- | --- | --- | --- | --- |
@@ -18,6 +18,7 @@ Regenerasi: `npm run harness:index`. Sumber kebenaran: shard features/progress/h
 | 15 | passing | [GitHub #6 — Produk Jual](features/issue-06-products.json) | main | 2 |
 | 15 | not_started | [P5 — QRIS dan Bukti Privat](features/p5-qris-evidence.json) | — | 0 |
 | 16 | passing | [GitHub #7 — Bahan Baku/Kemasan](features/issue-07-materials.json) | main | 1 |
+| 16 | blocked | [GitHub #9 — Lihat Penjualan sesuai pemilik dan hari WIB](features/issue-09-view-sales.json) | issue-09-view-sales | 1 |
 | 16 | not_started | [P6 — Koreksi, Pembatalan, Refund, dan Input Susulan](features/p6-corrections-refunds.json) | — | 0 |
 | 17 | not_started | [P7 — Stok, Pembelian, dan Pengeluaran](features/p7-inventory-purchasing-expenses.json) | — | 0 |
 | 18 | not_started | [P8 — Laporan JSON](features/p8-reporting.json) | — | 0 |
@@ -27,6 +28,7 @@ Regenerasi: `npm run harness:index`. Sumber kebenaran: shard features/progress/h
 
 - [harness-bootstrap.md](handoffs/harness-bootstrap.md)
 - [issue-08-cash-sales.md](handoffs/issue-08-cash-sales.md)
+- [issue-09-view-sales.md](handoffs/issue-09-view-sales.md)
 - [issues-03-07.md](handoffs/issues-03-07.md)
 - [mvp-ticket-planning.md](handoffs/mvp-ticket-planning.md)
 - [p0-local-runtime.md](handoffs/p0-local-runtime.md)
@@ -37,9 +39,9 @@ Regenerasi: `npm run harness:index`. Sumber kebenaran: shard features/progress/h
 - [2026-09-19-mvp-ticket-draft.md](progress/2026-09-19-mvp-ticket-draft.md)
 - [2026-09-19-issues-03-07-closeout.md](progress/2026-09-19-issues-03-07-closeout.md)
 - [2026-09-19-issue-publication.md](progress/2026-09-19-issue-publication.md)
+- [2026-09-19-issue-09-view-sales.md](progress/2026-09-19-issue-09-view-sales.md)
 - [2026-09-19-issue-08-cash-sales.md](progress/2026-09-19-issue-08-cash-sales.md)
 - [2026-09-19-issue-07-materials-and-final.md](progress/2026-09-19-issue-07-materials-and-final.md)
 - [2026-09-19-issue-06-products.md](progress/2026-09-19-issue-06-products.md)
 - [2026-09-19-issue-05-accounts.md](progress/2026-09-19-issue-05-accounts.md)
 - [2026-09-19-issue-04-session.md](progress/2026-09-19-issue-04-session.md)
-- [2026-09-19-issue-03-login.md](progress/2026-09-19-issue-03-login.md)

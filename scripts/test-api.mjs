@@ -892,6 +892,41 @@ try {
     console.log(
       'PASS cash sales total/snapshot/idempotency/rollback/permissions/WIB scope',
     );
+    // Issue #9: detail membedakan waktu kejadian dari waktu/pelaku input.
+    assert.equal(sale.body.recordedAt, sale.body.occurredAt);
+    assert.equal(sale.body.recordedBy, readerAccount.id);
+    // Pergantian hari WIB dengan waktu terkendali (00.00 WIB = 17.00 UTC).
+    time = new Date('2026-09-27T16:59:59Z'); // 23:59:59 WIB
+    const late = await clockApi(
+      '/sales',
+      { items: [{ productId: manis.body.id, quantity: 1 }] },
+      readerToken,
+      'sale-late-01',
+    );
+    assert.equal(late.status, 200, JSON.stringify(late.body));
+    assert.equal(late.body.occurredAt, '2026-09-27T16:59:59.000Z');
+    assert.deepEqual(
+      (await clockApi('/sales', undefined, readerToken)).body.items.map(
+        (row) => row.id,
+      ),
+      [late.body.id],
+    );
+    time = new Date('2026-09-27T17:00:01Z'); // 00:00:01 WIB, hari berikutnya
+    assert.equal(
+      (await clockApi('/sales', undefined, readerToken)).body.items.length,
+      0,
+    );
+    assert.equal(
+      (await clockApi(`/sales/${late.body.id}`, undefined, readerToken))
+        .status,
+      404,
+    );
+    // Admin tetap melihat semua penjualan lintas hari/petugas.
+    assert.equal(
+      (await clockApi('/sales', undefined, admin)).body.items.length,
+      3,
+    );
+    console.log('PASS view sales: input time distinction, WIB midnight boundary');
   } finally {
     await app.close();
   }
