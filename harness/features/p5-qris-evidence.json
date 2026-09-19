@@ -3,8 +3,8 @@
   "priority": 15,
   "area": "P5",
   "title": "P5 — QRIS dan Bukti Privat",
-  "status": "not_started",
-  "branch": null,
+  "status": "in_progress",
+  "branch": "p5-qris-evidence",
   "depends_on": [
     "p4-cash-sales"
   ],
