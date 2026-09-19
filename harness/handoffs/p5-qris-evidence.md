@@ -1,6 +1,6 @@
 # Handoff — p5-qris-evidence (GitHub #10/#11/#12 / P5)
 
-- Branch: p5-qris-evidence (commit lokal, belum push)
+- Branch: p5-qris-evidence (di-push; PR #33)
 - Feature: p5-qris-evidence — status `in_progress` dengan branch aktual
 - Plan: docs/plans/mvp-implementation-plan.md#p5--qris-dan-bukti-privat;
   keputusan Q10/Q26/Q27/Q31 pada docs/plans/mvp-decisions.md; kontrak
@@ -59,4 +59,4 @@ npm run verify     # gagal hanya di harness:check (dependensi p4)
 npm run harness:index
 ```
 
-Tidak push/PR/deploy; worktree P7 tidak disentuh.
+Di-push atas permintaan pengguna: PR #33 (https://github.com/makayasa/esteh-backend-nestjs/pull/33), tanpa deploy. Worktree P7 tidak disentuh.
