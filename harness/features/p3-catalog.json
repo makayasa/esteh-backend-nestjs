@@ -1,0 +1,25 @@
+{
+  "id": "p3-catalog",
+  "priority": 13,
+  "area": "P3",
+  "title": "P3 — Katalog Produk dan Bahan",
+  "status": "blocked",
+  "blocked_reason": "Master produk/material dan AC lintas-domain #6 terbukti; status passing menunggu dependensi p2-identity yang masih tertahan agregat P1 (keputusan pengguna).",
+  "branch": null,
+  "depends_on": ["p2-identity"],
+  "spec": "docs/plans/mvp-implementation-plan.md#p3--katalog-produk-dan-bahan",
+  "verification": [
+    "npm run verify",
+    "Uji varian/ukuran, izin perubahan katalog, snapshot referensi historis dan satuan tetap sesuai P3."
+  ],
+  "evidence": [
+    {
+      "path": "harness/progress/2026-09-19-issues-03-07-closeout.md",
+      "summary": "Master katalog/role/pagination/satuan immutable lulus; history sales belum terbukti, #6 open."
+    },
+    {
+      "path": "harness/progress/2026-09-19-issue-08-cash-sales.md",
+      "summary": "Snapshot harga historis dan validasi payload penjualan kini terbukti pada #8; issue-06 passing."
+    }
+  ]
+}

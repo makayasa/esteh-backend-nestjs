@@ -1,0 +1,18 @@
+{
+  "id": "p8-reporting",
+  "priority": 18,
+  "area": "P8",
+  "title": "P8 — Laporan JSON",
+  "status": "not_started",
+  "branch": null,
+  "depends_on": [
+    "p6-corrections-refunds",
+    "p7-inventory-purchasing-expenses"
+  ],
+  "spec": "docs/plans/mvp-implementation-plan.md#p8--laporan-json",
+  "verification": [
+    "npm run verify",
+    "Rekonsiliasi fixture laporan, revisi efektif, tanggal uang/penjualan/refund dan batas WIB sesuai P8."
+  ],
+  "evidence": []
+}

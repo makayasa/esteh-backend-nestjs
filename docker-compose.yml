@@ -1,0 +1,54 @@
+# Esteh — stack lokaal: app (NestJS) + PostgreSQL.
+# Zie README na nilai uit .env en start met: docker compose up --build
+
+name: esteh
+
+services:
+  db:
+    image: postgres:17-alpine@sha256:f02121de6f74d30d8a94cd1d9584125e2178d7e6c377d8130112d4e52d867995
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER wajib diisi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD wajib diisi}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB wajib diisi}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # Geen poorten gepubliceerd: de DB is alleen bereikbaar vanuit het
+    # compose-netwerk (Q29: PostgreSQL niet exposeren; ook niet op LAN).
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      # Bind container berbeda dari bind port host di bawah.
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL wajib diisi}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET wajib diisi}
+    ports:
+      - '${HOST:-127.0.0.1}:${PORT:-3000}:3000'
+    volumes:
+      - uploads:/app/uploads
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(''http://127.0.0.1:3000/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+volumes:
+  db-data:
+  uploads:

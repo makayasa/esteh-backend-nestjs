@@ -1,0 +1,24 @@
+{
+  "id": "issue-06-products",
+  "priority": 15,
+  "area": "P3",
+  "title": "GitHub #6 — Produk Jual",
+  "status": "passing",
+  "branch": "main",
+  "depends_on": ["issue-05-accounts"],
+  "spec": "docs/plans/issues-03-07.md",
+  "verification": [
+    "npm run test:api",
+    "Varian/harga/ketersediaan, role, pagination, nonaktif, harga historis saat sales tersedia"
+  ],
+  "evidence": [
+    {
+      "path": "harness/progress/2026-09-19-issue-06-products.md",
+      "summary": "Master HTTP PostgreSQL lulus; AC lintas-domain sales belum diuji, tidak passing."
+    },
+    {
+      "path": "harness/progress/2026-09-19-issue-08-cash-sales.md",
+      "summary": "AC lintas-domain kini terbukti: karyawan tidak bisa mengubah harga via payload penjualan (400) dan harga historis snapshot tidak berubah setelah reprice katalog; test:api exit 0."
+    }
+  ]
+}

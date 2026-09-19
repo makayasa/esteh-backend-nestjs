@@ -1,0 +1,22 @@
+{
+  "id": "harness-bootstrap",
+  "priority": 0,
+  "area": "tooling",
+  "title": "Adaptasi harness MyXL ke Esteh",
+  "status": "blocked",
+  "branch": "main",
+  "depends_on": [],
+  "spec": "docs/plans/harness-adoption.md",
+  "verification": [
+    "npm run verify",
+    "npm run harness:index; output deterministik",
+    "Regression tests validator, diff gate dan CLI pada temporary repo; tidak mengubah src/ atau status MVP."
+  ],
+  "evidence": [
+    {
+      "path": "harness/progress/2026-09-19-harness-bootstrap.md",
+      "summary": "13/13 tooling tests dan validator/lint/index lulus; full gate exit 1 karena health e2e paralel, belum passing."
+    }
+  ],
+  "blocked_reason": "Full gate 2026-09-19: e2e health pada perubahan P0 paralel gagal assertion res.body.message. Tooling harness 13/13 lulus; tunggu rekonsiliasi P0 lalu rerun npm run verify."
+}

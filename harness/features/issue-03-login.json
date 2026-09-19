@@ -1,0 +1,20 @@
+{
+  "id": "issue-03-login",
+  "priority": 12,
+  "area": "P1/P2",
+  "title": "GitHub #3 — Bootstrap admin dan login aman",
+  "status": "passing",
+  "branch": "main",
+  "depends_on": ["p0-local-runtime"],
+  "spec": "docs/plans/issues-03-07.md",
+  "verification": [
+    "npm run verify",
+    "HTTP/CLI pada PostgreSQL terisolasi: login, retry, concurrency, rollback, audit tanpa secret"
+  ],
+  "evidence": [
+    {
+      "path": "harness/progress/2026-09-19-issue-03-login.md",
+      "summary": "CLI/HTTP PostgreSQL nyata lulus: bootstrap, login, concurrency/replay, konflik, audit rollback, rate limit, hash token dan log tanpa secret."
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "p6-corrections-refunds",
+  "priority": 16,
+  "area": "P6",
+  "title": "P6 — Koreksi, Pembatalan, Refund, dan Input Susulan",
+  "status": "not_started",
+  "branch": null,
+  "depends_on": [
+    "p5-qris-evidence"
+  ],
+  "spec": "docs/plans/mvp-implementation-plan.md#p6--koreksi-pembatalan-refund-dan-input-susulan",
+  "verification": [
+    "npm run verify",
+    "Uji koreksi tanpa uang fiktif, input susulan, pembatalan, refund sekali dan concurrency sesuai P6."
+  ],
+  "evidence": []
+}

@@ -1,0 +1,20 @@
+{
+  "id": "issue-04-session",
+  "priority": 13,
+  "area": "P2",
+  "title": "GitHub #4 — Expiry session dan logout",
+  "status": "passing",
+  "branch": "main",
+  "depends_on": ["issue-03-login"],
+  "spec": "docs/plans/issues-03-07.md",
+  "verification": [
+    "npm run test:api",
+    "HTTP clock terkendali: idle 12 jam, absolut 7 hari, logout dan revoked replay"
+  ],
+  "evidence": [
+    {
+      "path": "harness/progress/2026-09-19-issue-04-session.md",
+      "summary": "Red/green HTTP PostgreSQL nyata: idle tepat 12h, absolut tepat 7d meski aktivitas, logout/revoked replay lulus."
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+CREATE TABLE "Product" (
+  "id" TEXT PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "price" INTEGER NOT NULL CHECK ("price" BETWEEN 1 AND 1000000000),
+  "available" BOOLEAN NOT NULL,
+  "active" BOOLEAN NOT NULL DEFAULT true
+);

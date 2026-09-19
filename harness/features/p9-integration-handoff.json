@@ -1,0 +1,17 @@
+{
+  "id": "p9-integration-handoff",
+  "priority": 19,
+  "area": "P9",
+  "title": "P9 — Verifikasi dan Handoff Frontend",
+  "status": "not_started",
+  "branch": null,
+  "depends_on": [
+    "p8-reporting"
+  ],
+  "spec": "docs/plans/mvp-implementation-plan.md#p9--verifikasi-dan-handoff-frontend",
+  "verification": [
+    "npm run verify",
+    "Jalankan seluruh acceptance P0–P8, uji beban sintetis, dokumentasi API dan restart Compose sesuai P9."
+  ],
+  "evidence": []
+}

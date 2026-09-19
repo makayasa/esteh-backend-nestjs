@@ -1,0 +1,24 @@
+{
+  "id": "p0-local-runtime",
+  "priority": 10,
+  "area": "P0",
+  "title": "P0 — Aplikasi Bisa Running Lokal",
+  "status": "passing",
+  "branch": "main",
+  "depends_on": [],
+  "spec": "docs/plans/mvp-implementation-plan.md#p0--aplikasi-bisa-running-lokal",
+  "verification": [
+    "npm run verify",
+    "Buktikan startup Compose, migration, readiness DB, restart volume, batas localhost, dan navigasi Graphify sesuai P0."
+  ],
+  "evidence": [
+    {
+      "path": "harness/progress/2026-09-19-p0-local-runtime-reconciliation.md",
+      "summary": "Compose bersih healthy; migration pertama dan dua replay lulus; DB mati HTTP 503/container unhealthy lalu recovery; restart serta down/up menjaga fixture; bind 127.0.0.1 dan DB tanpa publikasi port; verify lulus (13 tooling, 1 unit, 2 e2e). Graphify generate/query belum terverifikasi pada sesi runtime."
+    },
+    {
+      "path": "harness/progress/2026-09-19-issue-02-graphify.md",
+      "summary": "Graphify 0.9.1 generate berulang, 12 file allowlist, 58 nodes/71 edges; query/path health dan audit source/output lulus. Dokumen heading-only; 17 raw dangling AST edges diungkap pada diagnostics."
+    }
+  ]
+}

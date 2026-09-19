@@ -1,0 +1,17 @@
+{
+  "id": "p7-inventory-purchasing-expenses",
+  "priority": 17,
+  "area": "P7",
+  "title": "P7 — Stok, Pembelian, dan Pengeluaran",
+  "status": "not_started",
+  "branch": null,
+  "depends_on": [
+    "p3-catalog"
+  ],
+  "spec": "docs/plans/mvp-implementation-plan.md#p7--stok-pembelian-dan-pengeluaran",
+  "verification": [
+    "npm run verify",
+    "Uji pembelian-stock atomik, retry, stok non-negatif konkuren, koreksi dan role admin sesuai P7."
+  ],
+  "evidence": []
+}

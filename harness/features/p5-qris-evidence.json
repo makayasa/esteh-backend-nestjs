@@ -1,0 +1,17 @@
+{
+  "id": "p5-qris-evidence",
+  "priority": 15,
+  "area": "P5",
+  "title": "P5 — QRIS dan Bukti Privat",
+  "status": "not_started",
+  "branch": null,
+  "depends_on": [
+    "p4-cash-sales"
+  ],
+  "spec": "docs/plans/mvp-implementation-plan.md#p5--qris-dan-bukti-privat",
+  "verification": [
+    "npm run verify",
+    "Uji QRIS pending/confirmation, izin bukti privat, file invalid, concurrent confirmation dan restart file sesuai P5."
+  ],
+  "evidence": []
+}

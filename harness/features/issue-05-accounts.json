@@ -1,0 +1,20 @@
+{
+  "id": "issue-05-accounts",
+  "priority": 14,
+  "area": "P2",
+  "title": "GitHub #5 — Kelola akun",
+  "status": "passing",
+  "branch": "main",
+  "depends_on": ["issue-04-session"],
+  "spec": "docs/plans/issues-03-07.md",
+  "verification": [
+    "npm run test:api",
+    "Admin create/reset/nonaktif, revoke semua session, role, concurrency dan rollback"
+  ],
+  "evidence": [
+    {
+      "path": "harness/progress/2026-09-19-issue-05-accounts.md",
+      "summary": "HTTP PostgreSQL nyata: admin create/list, karyawan 403, concurrent replay, konflik, reset/nonaktif revoke semua token, fault audit rollback atomik."
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "p4-cash-sales",
+  "priority": 14,
+  "area": "P4",
+  "title": "P4 — Penjualan Tunai End-to-End",
+  "status": "blocked",
+  "blocked_reason": "Seluruh AC #8 terbukti pada PostgreSQL nyata (total server, snapshot, satu penerimaan, retry, larangan backdate, rollback); status passing menunggu dependensi p3-catalog yang masih tertahan agregat P1/P2 menunggu keputusan pengguna.",
+  "branch": "main",
+  "depends_on": ["p3-catalog"],
+  "spec": "docs/plans/mvp-implementation-plan.md#p4--penjualan-tunai-end-to-end",
+  "verification": [
+    "npm run verify",
+    "Uji total server, snapshot harga, satu penerimaan tunai, retry dan larangan backdate karyawan sesuai P4."
+  ],
+  "evidence": [
+    {
+      "path": "harness/progress/2026-09-19-issue-08-cash-sales.md",
+      "summary": "test:api exit 0: penerimaan 2x5000=10000, snapshot reprice, retry/409, trigger DB receipt_matches_total, rollback audit fault, izin dan batas hari WIB; verify exit 0."
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "id": "issue-07-materials",
+  "priority": 16,
+  "area": "P3",
+  "title": "GitHub #7 — Bahan Baku/Kemasan",
+  "status": "passing",
+  "branch": "main",
+  "depends_on": ["issue-05-accounts"],
+  "spec": "docs/plans/issues-03-07.md",
+  "verification": [
+    "npm run test:api",
+    "Master satuan tetap, presisi eksplisit, role, nonaktif tanpa hapus"
+  ],
+  "evidence": [
+    {
+      "path": "harness/progress/2026-09-19-issue-07-materials-and-final.md",
+      "summary": "HTTP + PostgreSQL master bahan: unit/scale immutable via API/trigger, role, FK sintetis tetap, concurrent replay/konflik lulus; final Compose bootstrap/login/restart/readiness lulus."
+    }
+  ]
+}

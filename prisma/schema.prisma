@@ -1,0 +1,110 @@
+// Esteh backend — Prisma schema.
+// P0: schema kosong selain generator/datasource untuk membuktikan koneksi DB.
+// Rancangan tabel domain per tahap (P1+), bukan semua sekaligus.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id           String @id @default(uuid())
+  username     String @unique
+  passwordHash String
+  role         String
+  active       Boolean @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  sessions     Session[]
+  sales        Sale[]
+  receipts     Receipt[]
+}
+
+model Session {
+  id         String @id @default(uuid())
+  accountId  String
+  account    Account @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  tokenHash  String @unique
+  createdAt  DateTime @db.Timestamptz(3)
+  lastSeenAt DateTime @db.Timestamptz(3)
+  revokedAt  DateTime? @db.Timestamptz(3)
+  @@index([accountId])
+}
+
+model Audit {
+  id        String @id @default(uuid())
+  actorId   String
+  action    String
+  objectId  String
+  createdAt DateTime @db.Timestamptz(3)
+}
+
+model Idempotency {
+  actorId     String
+  operation   String
+  key         String
+  payloadHash String
+  result      Json
+  @@id([actorId, operation, key])
+}
+
+model Material {
+  id            String @id @default(uuid())
+  name          String
+  unit          String
+  quantityScale Int
+  active        Boolean @default(true)
+}
+
+model Product {
+  id        String @id @default(uuid())
+  name      String
+  price     Int
+  available Boolean
+  active    Boolean @default(true)
+  saleItems SaleItem[]
+}
+
+// Penjualan: harga snapshot pada saat kejadian; tidak mengikuti harga katalog.
+model Sale {
+  id         String @id @default(uuid())
+  occurredAt DateTime @db.Timestamptz(3)
+  recordedBy String
+  account    Account @relation(fields: [recordedBy], references: [id])
+  items      SaleItem[]
+  receipt    Receipt?
+}
+
+model SaleItem {
+  id        String @id @default(uuid())
+  saleId    String
+  sale      Sale @relation(fields: [saleId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  name      String
+  unitPrice Int
+  quantity  Int
+  @@index([saleId])
+}
+
+// Penerimaan Pembayaran: satu per penjualan, nominal dihitung backend.
+model Receipt {
+  id         String @id @default(uuid())
+  saleId     String @unique
+  sale       Sale @relation(fields: [saleId], references: [id])
+  method     String
+  amount     Int
+  receivedAt DateTime @db.Timestamptz(3)
+  receivedBy String
+  account    Account @relation(fields: [receivedBy], references: [id])
+}
+
+model LoginLimit {
+  bucket  String @id
+  startAt DateTime @db.Timestamptz(3)
+  count   Int
+}
