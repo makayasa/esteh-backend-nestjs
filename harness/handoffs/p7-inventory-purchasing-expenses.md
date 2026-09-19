@@ -59,3 +59,4 @@
 - Worktree: `/Users/makayasa/Projects/project-esteh/esteh-backend-nestjs-p7`,
   branch `p7-inventory-purchasing-expenses`; jangan dikerjakan di repo utama
   (P5 paralel di sana).
+- Commit `b0394e3` telah di-push; PR: https://github.com/makayasa/esteh-backend-nestjs/pull/32
