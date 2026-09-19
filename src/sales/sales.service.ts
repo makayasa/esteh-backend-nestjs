@@ -23,6 +23,7 @@ type SaleWithItems = Prisma.SaleGetPayload<{
 const view = (sale: SaleWithItems) => ({
   id: sale.id,
   occurredAt: sale.occurredAt,
+  recordedAt: sale.recordedAt,
   recordedBy: sale.recordedBy,
   items: sale.items.map((item) => ({
     productId: item.productId,
@@ -93,7 +94,13 @@ export class SalesService {
           throw new BadRequestException('Total invalid');
         const now = this.clock.now();
         const sale = await tx.sale.create({
-          data: { occurredAt: now, recordedBy: actorId },
+          // Q12: penjualan normal mencatat waktu kejadian = waktu input server;
+          // karyawan tidak bisa memundurkan tanggal.
+          data: {
+            occurredAt: now,
+            recordedAt: now,
+            recordedBy: actorId,
+          },
         });
         await tx.saleItem.createMany({
           data: rows.map((row) => ({ ...row, saleId: sale.id })),
@@ -111,6 +118,7 @@ export class SalesService {
           result: {
             id: sale.id,
             occurredAt: now,
+            recordedAt: now,
             recordedBy: actorId,
             items: rows,
             total,

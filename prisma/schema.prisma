@@ -70,9 +70,11 @@ model Product {
 }
 
 // Penjualan: harga snapshot pada saat kejadian; tidak mengikuti harga katalog.
+// occurredAt = waktu kejadian; recordedAt/recordedBy = waktu & pelaku input (Q12).
 model Sale {
   id         String @id @default(uuid())
   occurredAt DateTime @db.Timestamptz(3)
+  recordedAt DateTime @db.Timestamptz(3)
   recordedBy String
   account    Account @relation(fields: [recordedBy], references: [id])
   items      SaleItem[]
