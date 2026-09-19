@@ -57,3 +57,16 @@
 ## Working tree / commits
 
 - Commit lokal di branch p7-inventory-purchasing-expenses; belum push.
+## Sesi lanjutan — merge main (P5 #33), buka PR #32
+
+- Merge `origin/main` (P5 QRIS + bukti privat) ke branch; konflik tunggal di
+  `scripts/test-api.mjs` diselesaikan dengan menggabungkan blok P5 lalu blok
+  P7 dalam scope `clockApi`; assert `items[0].purchaseId` yang flaky (urutan
+  uuid acak) diganti pencarian entri `kind = 'purchase'`.
+- Tambah progress baru (file ini), tracker tetap `in_progress`.
+
+| Command / check | Result / exit code | Scope |
+| --- | --- | --- |
+| `npm run test:api` | exit 0; 19 kelompok PASS (P0–P5 + 8 kelompok P7) | P5 dan P7 co-exist: penerimaan restart bukti P5 tetap lulus, seluruh acceptance P7 tetap lulus di atas skema 0007+0008 |
+| `npm run build` / `npm run lint` / `npm test` / `npm run test:e2e` / `harness:lint` / `harness:test` | exit 0 | Gate non-dependency lulus pasca-merge |
+| `npm run verify` | GAGAL di `harness:check`: p5 (dep p4) dan p7 (dep p3) — dependency blocked keputusan pengguna | Bukan regresi; rantai dependensi identik sebelum merge |

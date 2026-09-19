@@ -17,6 +17,10 @@
     {
       "path": "harness/progress/2026-09-19-p7-inventory-purchasing.md",
       "summary": "test:api 7 kelompok P7 lulus di postgres nyata: pembelian atomik/idempoten/retry, kontensi saldo non-negatif, rollback pembelian, koreksi tanpa hard-delete, karyawan 403. verify gagal hanya karena p3-catalog blocked."
+    },
+    {
+      "path": "harness/progress/2026-09-19-p7-inventory-purchasing.md",
+      "summary": "Merge main (P5) resolved di test-api.mjs; test:api 19 kelompok PASS, gate non-dependency lulus; verify tetap tertahan p3-catalog blocked."
     }
   ]
 }

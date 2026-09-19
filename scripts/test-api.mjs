@@ -1614,7 +1614,10 @@ try {
       ['adjustment', 'purchase', 'usage', 'usage', 'waste'],
     );
     assert.equal(history.body.material.stock, 270);
-    assert.equal(history.body.items[0].purchaseId, purchase.body.id);
+    assert.equal(
+      history.body.items.find((row) => row.kind === 'purchase').purchaseId,
+      purchase.body.id,
+    );
     // DB invariant: saldo stok dan ledger tidak bisa diviolasi langsung.
     await assert.rejects(
       db.query('UPDATE "Material" SET stock = -1 WHERE id = $1', [gula.body.id]),
