@@ -3,8 +3,8 @@
   "priority": 0,
   "area": "tooling",
   "title": "Adaptasi harness MyXL ke Esteh",
-  "status": "blocked",
-  "branch": "main",
+  "status": "passing",
+  "branch": "aggregate-certification",
   "depends_on": [],
   "spec": "docs/plans/harness-adoption.md",
   "verification": [
@@ -15,8 +15,11 @@
   "evidence": [
     {
       "path": "harness/progress/2026-09-19-harness-bootstrap.md",
-      "summary": "13/13 tooling tests dan validator/lint/index lulus; full gate exit 1 karena health e2e paralel, belum passing."
+      "summary": "13/13 tooling tests dan validator/lint/index lulus; full gate exit 1 karena health e2e paralel, belum passing pada sesi tersebut."
+    },
+    {
+      "path": "harness/progress/2026-09-20-p9-load-handoff.md",
+      "summary": "Blocker health lama sudah diperbaiki; full verify, tooling13/13, e2e2/2, index/state/diff gate rerun lulus, lihat handoff agregat."
     }
-  ],
-  "blocked_reason": "Full gate 2026-09-19: e2e health pada perubahan P0 paralel gagal assertion res.body.message. Tooling harness 13/13 lulus; tunggu rekonsiliasi P0 lalu rerun npm run verify."
+  ]
 }

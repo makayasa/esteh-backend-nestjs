@@ -1,48 +1,37 @@
-# Handoff — issue-09-view-sales (GitHub #9 / P4)
+# Handoff — issue-09-view-sales
 
-- Branch issue-09-view-sales: PR #31 di-merge pengguna ke main (2e121d3);
-  tracker/index/handoff diperbarui pasca-merge.
-- Status blocked: seluruh AC terbukti, `passing` tertahan dependensi
-  p4-cash-sales (agregat P1/P2/P3, keputusan pengguna).
-- Plan: docs/plans/mvp-implementation-plan.md#p4--penjualan-tunai-end-to-end;
-  kontrak docs/api.md.
-- Latest progress: harness/progress/2026-09-19-issue-09-view-sales.md.
+- Branch terbaru: aggregate-certification, perubahan belum commit/push.
+- Status: passing setelah review dan perbaikan sesi20September2026.
+- Handoff lengkap: [aggregate-certification.md](aggregate-certification.md).
+- Progress baseline masing-masing tetap append-only; evidence baru pada
+  harness/progress/2026-09-19-aggregate-review.md dan
+  harness/progress/2026-09-20-p5-p7-review-fixes.md.
 
 ## Verified Now
 
-`npm run test:api` exit 0 dengan blok "PASS view sales: input time
-distinction, WIB midnight boundary": admin melihat semua penjualan lintas
-petugas/hari; karyawan hanya milik sendiri pada hari berjalan; akses
-lintas-petugas dan lintas-hari 404 tanpa membocorkan keberadaan resource;
-`recordedAt`/`recordedBy` terpisah dari `occurredAt` (Q12); pergantian hari
-WIB dengan waktu terkendali: 23:59:59 WIB terlihat, 00:00:01 WIB hilang dari
-akses karyawan; list berpaginasi 50/halaman. `npm run verify` exit 0.
+Full verify/API/load/Compose final lulus; rincian perintah, hasil dan batas pada
+handoff agregat dan progress P9. Ini sertifikasi integrasi lokal, bukan produksi.
 
 ## Changed
 
-prisma/schema.prisma + migration 0006_sale_recorded_at (`Sale.recordedAt`,
-backfill occurredAt), src/sales/sales.service.ts (recordedAt pada create dan
-respons), docs/api.md, tracker issue-09-view-sales baru, progress baru.
+Rekonsiliasi review izin replay/hari, role stok, decode foto/rollback, metadata
+koreksi/settlement, laporan dan gate. Jangan mengikuti blocker status handoff lama.
 
 ## Broken Or Unverified
 
-- Input susulan admin (waktu kejadian ≠ waktu input) P6; recordedAt belum
-  teruji berbeda dari occurredAt.
-- `passing` tertahan agregat P1/P2/P3 (keputusan pengguna).
-- npm audit advisory tetap; tanpa secret dalam evidence.
+Dependency advisory, mobile nyata, TLS/backup/restore produksi belum disertifikasi.
+Perubahan baru belum ada di remote; jangan menganggap closure issue berarti deploy.
 
 ## Next Best Step
 
-Keputusan agregat P1–P3; setelah p4-cash-sales passing, tracker ini mengikuti.
-Lanjut P5 atau P7. Review PR dan merge bila disetujui.
+Review diff dan tunggu instruksi commit/push/PR. Tidak deploy otomatis.
 
 ## Commands
 
 ```bash
-npm run test:api
 npm run verify
+npm run test:api
+npm run test:load
 npm run harness:index
 npm run harness:check
 ```
-
-Runtime localhost/LAN data uji saja; tanpa deploy.

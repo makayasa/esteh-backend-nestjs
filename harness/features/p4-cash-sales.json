@@ -2,11 +2,12 @@
   "id": "p4-cash-sales",
   "priority": 14,
   "area": "P4",
-  "title": "P4 — Penjualan Tunai End-to-End",
-  "status": "blocked",
-  "blocked_reason": "Seluruh AC #8 terbukti pada PostgreSQL nyata (total server, snapshot, satu penerimaan, retry, larangan backdate, rollback); status passing menunggu dependensi p3-catalog yang masih tertahan agregat P1/P2 menunggu keputusan pengguna.",
-  "branch": "main",
-  "depends_on": ["p3-catalog"],
+  "title": "P4 \u2014 Penjualan Tunai End-to-End",
+  "status": "passing",
+  "branch": "aggregate-certification",
+  "depends_on": [
+    "p3-catalog"
+  ],
   "spec": "docs/plans/mvp-implementation-plan.md#p4--penjualan-tunai-end-to-end",
   "verification": [
     "npm run verify",
@@ -16,6 +17,10 @@
     {
       "path": "harness/progress/2026-09-19-issue-08-cash-sales.md",
       "summary": "test:api exit 0: penerimaan 2x5000=10000, snapshot reprice, retry/409, trigger DB receipt_matches_total, rollback audit fault, izin dan batas hari WIB; verify exit 0."
+    },
+    {
+      "path": "harness/progress/2026-09-19-aggregate-review.md",
+      "summary": "Review canonical AC dan HTTP PostgreSQL ulang; scope replay lintas hari/role stok diperbaiki, fondasi P1\u2013P4 terbukti."
     }
   ]
 }

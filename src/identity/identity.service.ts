@@ -190,6 +190,11 @@ export class IdentityService {
       account: { id: string; role: string },
     ) => Promise<{ result: Prisma.InputJsonValue; objectId: string }>,
     roles: readonly string[] = ['admin'],
+    authorizeReplay?: (
+      tx: Prisma.TransactionClient,
+      account: { id: string; role: string },
+      result: Prisma.JsonValue,
+    ) => Promise<void>,
   ) {
     const key = text(requestKey, 8, 128);
     return this.authenticated(authorization, async (tx, account) => {
@@ -202,6 +207,7 @@ export class IdentityService {
         where: { actorId_operation_key: scope },
       });
       if (previous) {
+        await authorizeReplay?.(tx, account, previous.result);
         if (previous.payloadHash !== payloadHash)
           throw new ConflictException('Idempotency payload berbeda');
         return previous.result;

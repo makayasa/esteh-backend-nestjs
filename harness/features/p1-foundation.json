@@ -2,11 +2,12 @@
   "id": "p1-foundation",
   "priority": 11,
   "area": "P1",
-  "title": "P1 — Fondasi Kontrak dan Konsistensi",
-  "status": "blocked",
-  "blocked_reason": "Fondasi write/validation/audit/idempotency diuji pada #3–#7; aggregate belum disertifikasi lengkap untuk kontrak tanggal WIB, batas upload dan seluruh domain berikutnya.",
-  "branch": null,
-  "depends_on": ["p0-local-runtime"],
+  "title": "P1 \u2014 Fondasi Kontrak dan Konsistensi",
+  "status": "passing",
+  "branch": "aggregate-certification",
+  "depends_on": [
+    "p0-local-runtime"
+  ],
   "spec": "docs/plans/mvp-implementation-plan.md#p1--fondasi-kontrak-dan-konsistensi",
   "verification": [
     "npm run verify",
@@ -16,6 +17,10 @@
     {
       "path": "harness/progress/2026-09-19-issues-03-07-closeout.md",
       "summary": "Fondasi parsial teruji PostgreSQL: retry/concurrency/rollback, safe errors, protected Swagger; aggregate tidak dinyatakan passing."
+    },
+    {
+      "path": "harness/progress/2026-09-19-aggregate-review.md",
+      "summary": "Review canonical AC dan HTTP PostgreSQL ulang; scope replay lintas hari/role stok diperbaiki, fondasi P1\u2013P4 terbukti."
     }
   ]
 }

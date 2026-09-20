@@ -3,8 +3,8 @@
   "priority": 18,
   "area": "P8",
   "title": "P8 — Laporan JSON",
-  "status": "not_started",
-  "branch": null,
+  "status": "passing",
+  "branch": "aggregate-certification",
   "depends_on": [
     "p6-corrections-refunds",
     "p7-inventory-purchasing-expenses"
@@ -14,5 +14,5 @@
     "npm run verify",
     "Rekonsiliasi fixture laporan, revisi efektif, tanggal uang/penjualan/refund dan batas WIB sesuai P8."
   ],
-  "evidence": []
+  "evidence": [{"path":"harness/progress/2026-09-20-p8-reporting.md","summary":"Tiga laporan HTTP admin PostgreSQL: WIB, revisi efektif, refund/pending terpisah, fixture rekonsiliasi dan pagination lulus."}]
 }

@@ -20,6 +20,7 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:api": "npm run build && node scripts/test-api.mjs",
+    "test:load": "npm run build && node scripts/test-api.mjs --load",
     "bootstrap:admin": "node dist/bootstrap-admin.js",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "harness:check": "node scripts/harness/cli.mjs check",
@@ -39,7 +40,8 @@
     "pg": "^8.23.0",
     "prisma": "^7.10.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "sharp": "0.35.4"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",

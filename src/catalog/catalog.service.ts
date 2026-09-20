@@ -14,6 +14,13 @@ export class CatalogService {
       throw new BadRequestException('Page invalid');
     return this.identity.authenticated(auth, async (tx) => ({
       items: await tx.material.findMany({
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          quantityScale: true,
+          active: true,
+        },
         orderBy: { id: 'asc' },
         take: 50,
         skip: (Number(page) - 1) * 50,

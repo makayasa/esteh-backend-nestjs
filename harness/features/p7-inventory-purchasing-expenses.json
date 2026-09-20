@@ -2,9 +2,9 @@
   "id": "p7-inventory-purchasing-expenses",
   "priority": 17,
   "area": "P7",
-  "title": "P7 — Stok, Pembelian, dan Pengeluaran",
-  "status": "in_progress",
-  "branch": "p7-inventory-purchasing-expenses",
+  "title": "P7 \u2014 Stok, Pembelian, dan Pengeluaran",
+  "status": "passing",
+  "branch": "aggregate-certification",
   "depends_on": [
     "p3-catalog"
   ],
@@ -21,6 +21,10 @@
     {
       "path": "harness/progress/2026-09-19-p7-inventory-purchasing.md",
       "summary": "Merge main (P5) resolved di test-api.mjs; test:api 19 kelompok PASS, gate non-dependency lulus; verify tetap tertahan p3-catalog blocked."
+    },
+    {
+      "path": "harness/progress/2026-09-20-p5-p7-review-fixes.md",
+      "summary": "Review AC + perbaikan role/replay, decode foto/rollback, settlement/QRIS/refund retry, alasan koreksi; PostgreSQL API dan Compose upload/restart lulus."
     }
   ]
 }

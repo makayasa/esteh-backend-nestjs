@@ -12,7 +12,7 @@ from graphify.export import to_json
 from graphify.extract import extract
 
 ROOT = Path(__file__).resolve().parents[1]
-DOCS = ["CONTEXT.md", "docs/plans/mvp-decisions.md", "docs/plans/mvp-implementation-plan.md"]
+DOCS = ["CONTEXT.md", "docs/plans/mvp-decisions.md", "docs/plans/mvp-implementation-plan.md", "docs/api.md", "README.md"]
 OUT = ROOT / "graphify-out"
 
 

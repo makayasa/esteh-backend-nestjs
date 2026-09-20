@@ -107,6 +107,7 @@ model Sale {
   cancelledBy  String?
   cancelledByAccount Account? @relation("SaleCancellation", fields: [cancelledBy], references: [id])
   cancelReason String?
+  settlement   String?
   items        SaleItem[]
   receipt      Receipt?
   refund       Refund?
@@ -137,6 +138,7 @@ model Receipt {
   // Q26: referensi merchant/alasan hanya untuk konfirmasi QRIS tanpa bukti.
   merchantRef   String?
   confirmReason String?
+  confirmedAt   DateTime? @db.Timestamptz(3)
 }
 
 model LoginLimit {
@@ -164,6 +166,7 @@ model Refund {
 // tepat sekali lewat ledger atomik dalam transaksi yang sama. Koreksi
 // menghubungkan catatan lama/pengganti tanpa hard-delete (Q36).
 model Purchase {
+  reason        String?
   id            String @id @default(uuid())
   occurredAt    DateTime @db.Timestamptz(3)
   recordedAt    DateTime @db.Timestamptz(3)
@@ -212,6 +215,7 @@ model StockLedger {
 
 // Pengeluaran operasional terpisah dari pembelian dan refund (CONTEXT.md).
 model Expense {
+  reason        String?
   id            String @id @default(uuid())
   category      String
   amount        Int

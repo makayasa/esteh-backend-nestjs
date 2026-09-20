@@ -2,11 +2,12 @@
   "id": "p2-identity",
   "priority": 12,
   "area": "P2",
-  "title": "P2 — Identitas, Role, dan Session",
-  "status": "blocked",
-  "blocked_reason": "#3/#4/#5 selesai; hak akses objek transaksi dan batas hari WIB kini teruji pada #8. Status passing menunggu dependensi p1-foundation (agregat, keputusan pengguna).",
-  "branch": null,
-  "depends_on": ["p1-foundation"],
+  "title": "P2 \u2014 Identitas, Role, dan Session",
+  "status": "passing",
+  "branch": "aggregate-certification",
+  "depends_on": [
+    "p1-foundation"
+  ],
   "spec": "docs/plans/mvp-implementation-plan.md#p2--identitas-role-dan-session",
   "verification": [
     "npm run verify",
@@ -20,6 +21,10 @@
     {
       "path": "harness/progress/2026-09-19-issue-08-cash-sales.md",
       "summary": "RBAC objek transaksi (karyawan hanya milik sendiri, 404 di luar scope) dan batas hari WIB terbukti pada penjualan tunai."
+    },
+    {
+      "path": "harness/progress/2026-09-19-aggregate-review.md",
+      "summary": "Review canonical AC dan HTTP PostgreSQL ulang; scope replay lintas hari/role stok diperbaiki, fondasi P1\u2013P4 terbukti."
     }
   ]
 }

@@ -29,7 +29,14 @@ const startOfWibDay = (now: Date) => {
 // mundur boleh, maju melebihi waktu server tidak.
 const parseOccurredAt = (value: unknown, now: Date) => {
   if (value === undefined) return now;
-  const parsed = new Date(text(value, 20, 64));
+  const timestamp = text(value, 20, 64);
+  if (
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(
+      timestamp,
+    )
+  )
+    throw new BadRequestException('Zona waktu wajib');
+  const parsed = new Date(timestamp);
   if (
     Number.isNaN(parsed.getTime()) ||
     parsed.getTime() < 946684800000 ||
@@ -58,15 +65,12 @@ const view = (sale: SaleWithItems) => ({
   recordedAt: sale.recordedAt,
   recordedBy: sale.recordedBy,
   method: sale.method,
-  status: sale.cancelledAt
-    ? 'cancelled'
-    : sale.receipt
-      ? 'paid'
-      : 'pending',
+  status: sale.cancelledAt ? 'cancelled' : sale.receipt ? 'paid' : 'pending',
   correctsId: sale.correctsId,
   correctedById: sale.correctedById,
   manualRef: sale.manualRef,
   reason: sale.reason,
+  settlement: sale.settlement,
   items: sale.items.map((item) => ({
     productId: item.productId,
     name: item.name,
@@ -81,6 +85,7 @@ const view = (sale: SaleWithItems) => ({
     method: sale.receipt.method,
     amount: sale.receipt.amount,
     receivedAt: sale.receipt.receivedAt,
+    confirmedAt: sale.receipt.confirmedAt,
   },
   refund: sale.refund && {
     amount: sale.refund.amount,
@@ -195,6 +200,16 @@ export class SalesService {
         };
       },
       ['admin', 'employee'],
+      async (tx, account, result) => {
+        if (
+          !result ||
+          typeof result !== 'object' ||
+          Array.isArray(result) ||
+          typeof result.id !== 'string'
+        )
+          throw new NotFoundException();
+        await this.findScopedSale(tx, result.id, account);
+      },
     );
   }
   // Q23: admin memasukkan harga historis beralasan pada input susulan dan
@@ -228,7 +243,9 @@ export class SalesService {
           : undefined;
       if (
         unitPrice !== undefined &&
-        (!Number.isInteger(unitPrice) || unitPrice < 1 || unitPrice > 1000000000)
+        (!Number.isInteger(unitPrice) ||
+          unitPrice < 1 ||
+          unitPrice > 1000000000)
       )
         throw new BadRequestException('Harga invalid');
       return { productId, quantity, unitPrice };
@@ -277,13 +294,14 @@ export class SalesService {
     ]);
     const items = this.parseSaleItems(value.items, 'optional');
     const occurredAt = parseOccurredAt(
-      value.occurredAt === undefined ? undefined : text(value.occurredAt, 20, 64),
+      value.occurredAt === undefined
+        ? undefined
+        : text(value.occurredAt, 20, 64),
       this.clock.now(),
     );
     if (value.occurredAt === undefined)
       throw new BadRequestException('Waktu kejadian wajib diisi');
-    const occurredBy =
-      value.occurredBy === undefined ? null : text(value.occurredBy, 1, 64);
+    const occurredBy = text(value.occurredBy, 1, 64);
     const manualRef = requiredText(value.manualRef, 1, 128);
     const why = requiredText(value.reason, 1, 500);
     const method = this.validMethod(value.method);
@@ -362,7 +380,17 @@ export class SalesService {
   // Q20/Q25/Q36: koreksi menghubungkan catatan lama dan pengganti tanpa
   // penerimaan/refund fiktif; riwayat nilai lama tetap terlihat.
   correct(auth: unknown, key: unknown, saleId: string, input: unknown) {
-    const value = object(input, ['items', 'reason', 'method', 'merchantRef']);
+    const value = object(input, [
+      'items',
+      'reason',
+      'method',
+      'merchantRef',
+      'evidenceUnavailableReason',
+    ]);
+    const evidenceUnavailableReason =
+      value.evidenceUnavailableReason === undefined
+        ? null
+        : requiredText(value.evidenceUnavailableReason, 1, 500);
     const items = this.parseSaleItems(value.items, 'required');
     const why = requiredText(value.reason, 1, 500);
     const merchantRef =
@@ -373,7 +401,14 @@ export class SalesService {
       auth,
       'sale.correct',
       key,
-      { saleId, items, reason: why, method: value.method ?? null, merchantRef: merchantRef ?? null },
+      {
+        saleId,
+        items,
+        reason: why,
+        method: value.method ?? null,
+        merchantRef: merchantRef ?? null,
+        evidenceUnavailableReason,
+      },
       async (tx, actorId) => {
         await tx.$queryRaw`SELECT id FROM "Sale" WHERE id = ${saleId} FOR UPDATE`;
         const old = await tx.sale.findUnique({
@@ -391,9 +426,12 @@ export class SalesService {
         const method = this.validMethod(value.method ?? old.method);
         // Q25: koreksi metode menjadi QRIS memerlukan verifikasi merchant;
         // metode QRIS tetap terverifikasi pada catatan pengganti.
-        if (method === 'qris' && !merchantRef)
+        if (
+          method === 'qris' &&
+          (!merchantRef || (!old.evidencePath && !evidenceUnavailableReason))
+        )
           throw new BadRequestException(
-            'Referensi merchant wajib untuk metode QRIS',
+            'QRIS wajib referensi merchant serta bukti atau alasan pengecualian',
           );
         const rows = await this.resolveSaleItems(tx, items);
         const total = rows.reduce(
@@ -411,6 +449,13 @@ export class SalesService {
             method,
             correctsId: old.id,
             reason: why,
+            occurredBy: old.occurredBy,
+            manualRef: old.manualRef,
+            evidencePath: old.evidencePath,
+            evidenceMime: old.evidenceMime,
+            evidenceSize: old.evidenceSize,
+            evidenceAt: old.evidenceAt,
+            evidenceBy: old.evidenceBy,
           },
         });
         await tx.saleItem.createMany({
@@ -427,6 +472,11 @@ export class SalesService {
               receivedAt: old.receipt.receivedAt,
               receivedBy: old.receipt.receivedBy,
               merchantRef: method === 'qris' ? merchantRef : null,
+              confirmReason:
+                method === 'qris' && !old.evidencePath
+                  ? evidenceUnavailableReason
+                  : null,
+              confirmedAt: method === 'qris' ? now : null,
             },
           });
         await tx.sale.update({
@@ -445,13 +495,17 @@ export class SalesService {
   // Q11: pembatalan admin beralasan; penerimaan tidak pernah dihapus sehingga
   // dana yang pernah diterima tetap terlihat; refund dicatat terpisah (Q21).
   cancel(auth: unknown, key: unknown, saleId: string, input: unknown) {
-    const value = object(input, ['reason']);
+    const value = object(input, ['reason', 'settlement']);
     const why = requiredText(value.reason, 1, 500);
+    const settlement =
+      value.settlement === undefined
+        ? null
+        : requiredText(value.settlement, 1, 500);
     return this.identity.write(
       auth,
       'sale.cancel',
       key,
-      { saleId, reason: why },
+      { saleId, reason: why, settlement },
       async (tx, actorId) => {
         await tx.$queryRaw`SELECT id FROM "Sale" WHERE id = ${saleId} FOR UPDATE`;
         const sale = await tx.sale.findUnique({
@@ -459,14 +513,19 @@ export class SalesService {
           include: { items: true, receipt: true, refund: true },
         });
         if (!sale) throw new NotFoundException();
-        if (sale.cancelledAt)
-          throw new ConflictException('Sudah dibatalkan');
-        if (sale.correctedById)
-          throw new ConflictException('Sudah dikoreksi');
+        if (sale.cancelledAt) throw new ConflictException('Sudah dibatalkan');
+        if (sale.correctedById) throw new ConflictException('Sudah dikoreksi');
+        if (sale.receipt && !settlement)
+          throw new BadRequestException('Penyelesaian uang wajib dijelaskan');
         const now = this.clock.now();
         await tx.sale.update({
           where: { id: sale.id },
-          data: { cancelledAt: now, cancelledBy: actorId, cancelReason: why },
+          data: {
+            cancelledAt: now,
+            cancelledBy: actorId,
+            cancelReason: why,
+            settlement,
+          },
         });
         const fresh = await tx.sale.findUniqueOrThrow({
           where: { id: sale.id },
@@ -484,14 +543,16 @@ export class SalesService {
     const method = requiredText(value.method, 1, 32);
     const why = requiredText(value.reason, 1, 500);
     const occurredAt = parseOccurredAt(
-      value.occurredAt === undefined ? undefined : text(value.occurredAt, 20, 64),
+      value.occurredAt === undefined
+        ? undefined
+        : text(value.occurredAt, 20, 64),
       this.clock.now(),
     );
     return this.identity.write(
       auth,
       'sale.refund',
       key,
-      { saleId, method, reason: why, occurredAt },
+      { saleId, method, reason: why, occurredAt: value.occurredAt ?? null },
       async (tx, actorId) => {
         await tx.$queryRaw`SELECT id FROM "Sale" WHERE id = ${saleId} FOR UPDATE`;
         const sale = await tx.sale.findUnique({
@@ -501,8 +562,7 @@ export class SalesService {
         if (!sale) throw new NotFoundException();
         if (!sale.receipt)
           throw new BadRequestException('Penjualan belum lunas');
-        if (sale.correctedById)
-          throw new ConflictException('Sudah dikoreksi');
+        if (sale.correctedById) throw new ConflictException('Sudah dikoreksi');
         if (sale.refund) throw new ConflictException('Sudah direfund');
         const now = this.clock.now();
         await tx.refund.create({
@@ -529,7 +589,13 @@ export class SalesService {
   private scope(account: { id: string; role: string }, now: Date) {
     return account.role === 'admin'
       ? {}
-      : { recordedBy: account.id, occurredAt: { gte: startOfWibDay(now) } };
+      : {
+          recordedBy: account.id,
+          occurredAt: {
+            gte: startOfWibDay(now),
+            lt: new Date(startOfWibDay(now).getTime() + 86400000),
+          },
+        };
   }
   private assertReadable(
     sale: { recordedBy: string; occurredAt: Date; method: string },
@@ -538,7 +604,9 @@ export class SalesService {
     if (
       account.role !== 'admin' &&
       (sale.recordedBy !== account.id ||
-        sale.occurredAt.getTime() < startOfWibDay(this.clock.now()).getTime())
+        sale.occurredAt.getTime() < startOfWibDay(this.clock.now()).getTime() ||
+        sale.occurredAt.getTime() >=
+          startOfWibDay(this.clock.now()).getTime() + 86400000)
     )
       throw new NotFoundException();
   }
@@ -557,19 +625,24 @@ export class SalesService {
   }
   // #11/Q27: unggah bukti ke penjualan QRIS pending yang sudah ada; file
   // ditulis sebelum referensi DB dibuat. Retry identik idempoten.
-  uploadEvidence(
+  async uploadEvidence(
     auth: unknown,
     key: unknown,
     saleId: string,
     mime: string,
     bytes: unknown,
   ) {
-    if (!(bytes instanceof Buffer)) throw new BadRequestException('Bukti invalid');
+    if (!(bytes instanceof Buffer))
+      throw new BadRequestException('Bukti invalid');
     if (bytes.length < 1 || bytes.length > MAX_EVIDENCE_BYTES)
       throw new BadRequestException('Ukuran bukti invalid');
     if (!EVIDENCE_MIME.includes(mime as never))
       throw new BadRequestException('Tipe bukti invalid');
-    const cleaned = sanitizeEvidence(mime, bytes);
+    // Reject unauthenticated/out-of-scope requests before decoding untrusted bytes.
+    await this.identity.authenticated(auth, async (tx, account) => {
+      await this.findScopedSale(tx, saleId, account);
+    });
+    const cleaned = await sanitizeEvidence(mime, bytes);
     const payload = {
       saleId,
       mime,
@@ -582,13 +655,13 @@ export class SalesService {
       key,
       payload,
       async (tx, _actorId, account) => {
+        await tx.$queryRaw`SELECT id FROM "Sale" WHERE id = ${saleId} FOR UPDATE`;
         const sale = await this.findScopedSale(tx, saleId, account);
         if (sale.method !== 'qris')
           throw new BadRequestException('Bukti hanya untuk QRIS');
         if (sale.cancelledAt)
           throw new ConflictException('Penjualan sudah dibatalkan');
-        if (sale.receipt)
-          throw new ConflictException('Penjualan sudah lunas');
+        if (sale.receipt) throw new ConflictException('Penjualan sudah lunas');
         // Tulis file dulu; DB hanya mereferensi file yang sudah ada.
         const path = await saveEvidence(saleId, mime as never, cleaned);
         const now = this.clock.now();
@@ -611,6 +684,9 @@ export class SalesService {
         };
       },
       ['admin', 'employee'],
+      async (tx, account) => {
+        await this.findScopedSale(tx, saleId, account);
+      },
     );
   }
   // #11: unduh bukti via izin transaksi (bukan tautan statis); menebak ID
@@ -628,20 +704,24 @@ export class SalesService {
   // #12/Q10/Q26: konfirmasi manual setelah pemeriksaan merchant. Karyawan
   // wajib bukti; admin tanpa bukti harus memberi alasan + referensi merchant.
   confirm(auth: unknown, key: unknown, saleId: string, input: unknown) {
-    const value = object(input, ['reason', 'merchantRef']);
+    const value = object(input, ['reason', 'merchantRef', 'receivedAt']);
+    const receivedAt =
+      value.receivedAt === undefined
+        ? null
+        : parseOccurredAt(value.receivedAt, this.clock.now());
     const reason =
       value.reason === undefined
         ? undefined
-        : text(value.reason, 1, 500);
+        : requiredText(value.reason, 1, 500);
     const merchantRef =
       value.merchantRef === undefined
         ? undefined
-        : text(value.merchantRef, 1, 128);
+        : requiredText(value.merchantRef, 1, 128);
     return this.identity.write(
       auth,
       'sale.confirm',
       key,
-      { saleId, reason, merchantRef },
+      { saleId, reason, merchantRef, receivedAt },
       async (tx, _actorId, account) => {
         // Lock baris penjualan: dua konfirmasi konkuren hanya satu efek.
         await tx.$queryRaw`SELECT id FROM "Sale" WHERE id = ${saleId} FOR UPDATE`;
@@ -655,8 +735,7 @@ export class SalesService {
           throw new BadRequestException('Konfirmasi hanya untuk QRIS');
         if (sale.cancelledAt)
           throw new ConflictException('Penjualan sudah dibatalkan');
-        if (sale.receipt)
-          throw new ConflictException('Penjualan sudah lunas');
+        if (sale.receipt) throw new ConflictException('Penjualan sudah lunas');
         if (!sale.evidencePath && account.role !== 'admin')
           throw new BadRequestException('Bukti wajib diunggah');
         if (!sale.evidencePath && (!reason || !merchantRef))
@@ -673,7 +752,8 @@ export class SalesService {
             saleId: sale.id,
             method: 'qris',
             amount: total,
-            receivedAt: now,
+            receivedAt: receivedAt ?? now,
+            confirmedAt: now,
             receivedBy: account.id,
             // Q26: jejak pengecualian admin tanpa bukti tetap pada penerimaan.
             merchantRef: sale.evidencePath ? null : merchantRef,
@@ -687,6 +767,9 @@ export class SalesService {
         return { result: view(confirmed), objectId: sale.id };
       },
       ['admin', 'employee'],
+      async (tx, account) => {
+        await this.findScopedSale(tx, saleId, account);
+      },
     );
   }
   list(auth: unknown, page = '1') {

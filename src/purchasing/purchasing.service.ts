@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -46,7 +47,14 @@ const fromMicros = (micros: number, quantityScale: number) =>
 // default waktu server. Karyawan tidak memakai modul ini sama sekali (Q15).
 const parseOccurredAt = (value: unknown, now: Date) => {
   if (value === undefined) return now;
-  const parsed = new Date(text(value, 20, 64));
+  const timestamp = text(value, 20, 64);
+  if (
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(
+      timestamp,
+    )
+  )
+    throw new BadRequestException('Zona waktu wajib');
+  const parsed = new Date(timestamp);
   if (
     Number.isNaN(parsed.getTime()) ||
     parsed.getTime() < 946684800000 ||
@@ -102,6 +110,7 @@ const purchaseView = (row: PurchaseRow) => ({
   recordedBy: row.recordedBy,
   correctsId: row.correctsId,
   correctedById: row.correctedById,
+  reason: row.reason,
   items: row.items.map((item) => ({
     materialId: item.materialId,
     name: item.name,
@@ -122,6 +131,7 @@ const expenseView = (row: {
   recordedBy: string;
   correctsId: string | null;
   correctedById: string | null;
+  reason: string | null;
 }) => ({
   id: row.id,
   category: row.category,
@@ -132,6 +142,7 @@ const expenseView = (row: {
   recordedBy: row.recordedBy,
   correctsId: row.correctsId,
   correctedById: row.correctedById,
+  reason: row.reason,
 });
 
 // materialId null = pembelian alat: kuantitas dihitung utuh, tanpa stok (Q8).
@@ -170,10 +181,7 @@ export class PurchasingService {
 
   // Kuantitas item diubah ke mikro satuan menurut satuan tetap bahan;
   // bahan harus aktif. Alat memakai jumlah utuh tanpa sentuhan stok.
-  private async materializedItems(
-    tx: Prisma.TransactionClient,
-    items: Item[],
-  ) {
+  private async materializedItems(tx: Prisma.TransactionClient, items: Item[]) {
     const materials = await tx.material.findMany({
       where: {
         id: {
@@ -323,6 +331,7 @@ export class PurchasingService {
             recordedAt: now,
             recordedBy: actorId,
             correctsId: old.id,
+            reason: why,
           },
         });
         await tx.purchaseItem.createMany({
@@ -375,7 +384,8 @@ export class PurchasingService {
   purchases(auth: unknown, page = '1') {
     if (!/^[1-9]\d{0,5}$/.test(page))
       throw new BadRequestException('Page invalid');
-    return this.identity.authenticated(auth, async (tx) => {
+    return this.identity.authenticated(auth, async (tx, account) => {
+      if (account.role !== 'admin') throw new ForbiddenException();
       const rows = await tx.purchase.findMany({
         orderBy: { id: 'asc' },
         take: 50,
@@ -448,6 +458,7 @@ export class PurchasingService {
             recordedAt: now,
             recordedBy: actorId,
             correctsId: old.id,
+            reason: why,
           },
         });
         await tx.expense.update({
@@ -469,17 +480,20 @@ export class PurchasingService {
   expenses(auth: unknown, page = '1') {
     if (!/^[1-9]\d{0,5}$/.test(page))
       throw new BadRequestException('Page invalid');
-    return this.identity.authenticated(auth, async (tx) => ({
-      items: (
-        await tx.expense.findMany({
-          orderBy: { id: 'asc' },
-          take: 50,
-          skip: (Number(page) - 1) * 50,
-        })
-      ).map(expenseView),
-      page: Number(page),
-      pageSize: 50,
-    }));
+    return this.identity.authenticated(auth, async (tx, account) => {
+      if (account.role !== 'admin') throw new ForbiddenException();
+      return {
+        items: (
+          await tx.expense.findMany({
+            orderBy: { id: 'asc' },
+            take: 50,
+            skip: (Number(page) - 1) * 50,
+          })
+        ).map(expenseView),
+        page: Number(page),
+        pageSize: 50,
+      };
+    });
   }
 
   // Q18: pemakaian agregat harian, rusak/terbuang, penyesuaian fisik —
@@ -507,7 +521,12 @@ export class PurchasingService {
       auth,
       operation,
       key,
-      { materialId, [field]: amount, reason: why, occurredAt: value.occurredAt ?? null },
+      {
+        materialId,
+        [field]: amount,
+        reason: why,
+        occurredAt: value.occurredAt ?? null,
+      },
       async (tx, actorId) => {
         const occurredAt = parseOccurredAt(value.occurredAt, this.clock.now());
         const material = await tx.material.findUnique({
@@ -620,7 +639,8 @@ export class PurchasingService {
   ledger(auth: unknown, materialId = '', page = '1') {
     if (!/^[1-9]\d{0,5}$/.test(page))
       throw new BadRequestException('Page invalid');
-    return this.identity.authenticated(auth, async (tx) => {
+    return this.identity.authenticated(auth, async (tx, account) => {
+      if (account.role !== 'admin') throw new ForbiddenException();
       const rows = await tx.stockLedger.findMany({
         where: materialId ? { materialId } : {},
         orderBy: { id: 'asc' },
@@ -650,23 +670,26 @@ export class PurchasingService {
   }
 
   balances(auth: unknown) {
-    return this.identity.authenticated(auth, async (tx) => ({
-      items: (
-        await tx.material.findMany({
-          orderBy: { id: 'asc' },
-          select: {
-            id: true,
-            name: true,
-            unit: true,
-            quantityScale: true,
-            active: true,
-            stock: true,
-          },
-        })
-      ).map((row) => ({
-        ...row,
-        stock: fromMicros(row.stock, row.quantityScale),
-      })),
-    }));
+    return this.identity.authenticated(auth, async (tx, account) => {
+      if (account.role !== 'admin') throw new ForbiddenException();
+      return {
+        items: (
+          await tx.material.findMany({
+            orderBy: { id: 'asc' },
+            select: {
+              id: true,
+              name: true,
+              unit: true,
+              quantityScale: true,
+              active: true,
+              stock: true,
+            },
+          })
+        ).map((row) => ({
+          ...row,
+          stock: fromMicros(row.stock, row.quantityScale),
+        })),
+      };
+    });
   }
 }
