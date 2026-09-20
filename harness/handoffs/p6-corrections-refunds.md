@@ -1,4 +1,4 @@
-# Handoff — issue-08-cash-sales
+# Handoff — p6-corrections-refunds
 
 - Branch terbaru: aggregate-certification, perubahan belum commit/push.
 - Status: passing setelah review dan perbaikan sesi20September2026.

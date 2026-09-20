@@ -3,8 +3,8 @@
   "priority": 19,
   "area": "P9",
   "title": "P9 — Verifikasi dan Handoff Frontend",
-  "status": "not_started",
-  "branch": null,
+  "status": "passing",
+  "branch": "aggregate-certification",
   "depends_on": [
     "p8-reporting"
   ],
@@ -13,5 +13,5 @@
     "npm run verify",
     "Jalankan seluruh acceptance P0–P8, uji beban sintetis, dokumentasi API dan restart Compose sesuai P9."
   ],
-  "evidence": []
+  "evidence": [{"path":"harness/progress/2026-09-20-p9-load-handoff.md","summary":"1000 sales/10 users error0, DB receipt/refund/ledger reconcile; final Compose DB/photo persistence, protected OpenAPI/README/mobile rules, graph audit dan acceptance P0–P8 direkonsiliasi."}]
 }

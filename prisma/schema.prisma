@@ -25,6 +25,9 @@ model Account {
   purchases    Purchase[]
   ledger       StockLedger[]
   expenses     Expense[]
+  refunds      Refund[]
+  salesOccurred    Sale[] @relation("SaleOccurrence")
+  salesCancelled   Sale[] @relation("SaleCancellation")
 }
 
 model Session {
@@ -79,6 +82,7 @@ model Product {
 // Penjualan: harga snapshot pada saat kejadian; tidak mengikuti harga katalog.
 // occurredAt = waktu kejadian; recordedAt/recordedBy = waktu & pelaku input (Q12).
 // method 'qris': pending sampai konfirmasi (Q10); bukti privat di volume (Q27).
+// P6: koreksi lama/pengganti (Q20/Q25), input susulan (Q12/Q23), pembatalan.
 model Sale {
   id           String @id @default(uuid())
   occurredAt   DateTime @db.Timestamptz(3)
@@ -91,8 +95,22 @@ model Sale {
   evidenceSize Int?
   evidenceAt   DateTime? @db.Timestamptz(3)
   evidenceBy   String?
+  correctsId   String? @unique
+  corrects     Sale? @relation("SaleCorrection", fields: [correctsId], references: [id])
+  correctedById String? @unique
+  correctedBy  Sale? @relation("SaleCorrection")
+  occurredBy   String?
+  occurredByAccount Account? @relation("SaleOccurrence", fields: [occurredBy], references: [id])
+  manualRef    String?
+  reason       String?
+  cancelledAt  DateTime? @db.Timestamptz(3)
+  cancelledBy  String?
+  cancelledByAccount Account? @relation("SaleCancellation", fields: [cancelledBy], references: [id])
+  cancelReason String?
+  settlement   String?
   items        SaleItem[]
   receipt      Receipt?
+  refund       Refund?
 }
 
 model SaleItem {
@@ -120,6 +138,7 @@ model Receipt {
   // Q26: referensi merchant/alasan hanya untuk konfirmasi QRIS tanpa bukti.
   merchantRef   String?
   confirmReason String?
+  confirmedAt   DateTime? @db.Timestamptz(3)
 }
 
 model LoginLimit {
@@ -128,10 +147,26 @@ model LoginLimit {
   count   Int
 }
 
+// Refund penuh setelah uang benar-benar dikembalikan (Q11/Q21): satu per
+// penjualan lunas, nominal selalu sama dengan penerimaan (trigger DB).
+model Refund {
+  id         String @id @default(uuid())
+  saleId     String @unique
+  sale       Sale @relation(fields: [saleId], references: [id])
+  amount     Int
+  method     String
+  reason     String
+  occurredAt DateTime @db.Timestamptz(3)
+  recordedAt DateTime @db.Timestamptz(3)
+  recordedBy String
+  account    Account @relation(fields: [recordedBy], references: [id])
+}
+
 // Pembelian sudah dibayar penuh dan diterima sekaligus (Q17); stok bertambah
 // tepat sekali lewat ledger atomik dalam transaksi yang sama. Koreksi
 // menghubungkan catatan lama/pengganti tanpa hard-delete (Q36).
 model Purchase {
+  reason        String?
   id            String @id @default(uuid())
   occurredAt    DateTime @db.Timestamptz(3)
   recordedAt    DateTime @db.Timestamptz(3)
@@ -180,6 +215,7 @@ model StockLedger {
 
 // Pengeluaran operasional terpisah dari pembelian dan refund (CONTEXT.md).
 model Expense {
+  reason        String?
   id            String @id @default(uuid())
   category      String
   amount        Int

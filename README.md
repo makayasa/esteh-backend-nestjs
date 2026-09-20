@@ -4,11 +4,10 @@ Backend pencatatan operasional satu usaha/satu outlet. Istilah domain:
 [CONTEXT.md](./CONTEXT.md). Scope dan acceptance:
 [rencana MVP](./docs/plans/mvp-implementation-plan.md).
 
-**Status: P0 terverifikasi lokal.** Runtime dan navigasi Graphify tersedia;
-graph memiliki batas cakupan AST yang dijelaskan di bawah.
-Bukti terkini: [handoff P0](./harness/handoffs/p0-local-runtime.md).
-Issue #3/#4/#5/#7 selesai lokal. Master Produk Jual #6 tersedia, tetapi acceptance
-harga historis/payload penjualan menunggu #8; #6 tetap open. Bukan siap produksi.
+**Status: backend siap integrasi lokal dengan data uji; bukan siap produksi.**
+Identitas, katalog, penjualan tunai/QRIS, bukti privat, koreksi/refund, stok,
+pembelian/pengeluaran dan laporan JSON tersedia. Bukti/status akhir:
+[handoff agregat](./harness/handoffs/aggregate-certification.md).
 Kontrak dan bootstrap: [docs/api.md](./docs/api.md).
 
 ## Stack terverifikasi
@@ -81,8 +80,7 @@ docker compose start db
 docker compose up -d --wait --wait-timeout 120   # kembali healthy
 ```
 
-Schema bertambah per tahap. P0 hanya migration bootstrap `SELECT 1` dan tabel
-`_prisma_migrations`, belum tabel domain. Untuk membuat migration saat development,
+Migration bootstrap diikuti schema domain dan migration review additive. Untuk membuat migration saat development,
 jalankan `npx prisma migrate dev --name <nama>` dari workspace yang dapat mengakses
 DB development terisolasi; jangan arahkan ke DB berisi transaksi nyata. Compose
 normal tidak membuka DB ke host. Mengganti hostname menjadi `localhost` saja tidak
@@ -113,14 +111,15 @@ backup eksternal, dan notifikasi bukan syarat startup lokal.
 npm ci
 npm run verify       # harness, build, lint, unit, HTTP e2e
 npm run test:api      # CLI/HTTP/clock/audit pada PostgreSQL fresh (perlu Docker)
+npm run test:load     # suite di atas + 1.000 sales, 10 pengguna bersamaan
 npm run harness:index
 npm run harness:check
 ```
 
 HTTP e2e memakai endpoint TCP lokal yang menutup koneksi untuk mensimulasikan
 DB tidak tersedia, bukan DB dari `.env`. Bukti PostgreSQL nyata, migration,
-restart, dan bind dicatat terpisah pada progress P0. `harness:check -- --base`
-belum tersedia sebelum repo mempunyai commit base dan HEAD.
+restart, dan bind dicatat terpisah pada progress. `harness:check -- --base <commit>`
+hanya memeriksa committed diff; perubahan working tree belum tercakup.
 
 ## Graphify (development)
 
@@ -144,7 +143,7 @@ source/test. `.env`, foto, dump DB, uploads, dan runtime data tidak dibaca.
 Output lokal, gitignored: `graphify-out/graph.json`, `manifest.json`, dan
 `GRAPH_REPORT.md`. Manifest menyimpan corpus dan diagnostics; tidak ada API LLM
 atau layanan eksternal. Kode memakai AST, dokumen hanya heading/containment:
-ini bukan pencarian semantik penuh. AST final sesi #3–#7 punya 46 edge ke simbol/import yang
-tidak terselesaikan; Graphify mengabaikannya saat build. Jangan menganggap graph
+ini bukan pencarian semantik penuh. Manifest/report mencatat jumlah edge simbol
+unresolved yang diabaikan Graphify saat build. Jangan menganggap graph
 lengkap. Query health terverifikasi; selalu cek source aktual sebelum mengedit.
 Runtime Compose sudah diuji tanpa Graphify. Regenerate setelah source berubah.

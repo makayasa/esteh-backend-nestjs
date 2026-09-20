@@ -24,6 +24,7 @@ COPY --from=build /app/dist ./dist
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
 USER node
 EXPOSE 3000
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

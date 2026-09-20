@@ -2,9 +2,9 @@
   "id": "p6-corrections-refunds",
   "priority": 16,
   "area": "P6",
-  "title": "P6 — Koreksi, Pembatalan, Refund, dan Input Susulan",
-  "status": "not_started",
-  "branch": null,
+  "title": "P6 \u2014 Koreksi, Pembatalan, Refund, dan Input Susulan",
+  "status": "passing",
+  "branch": "aggregate-certification",
   "depends_on": [
     "p5-qris-evidence"
   ],
@@ -13,5 +13,10 @@
     "npm run verify",
     "Uji koreksi tanpa uang fiktif, input susulan, pembatalan, refund sekali dan concurrency sesuai P6."
   ],
-  "evidence": []
+  "evidence": [
+    {
+      "path": "harness/progress/2026-09-20-p5-p7-review-fixes.md",
+      "summary": "Review AC + perbaikan role/replay, decode foto/rollback, settlement/QRIS/refund retry, alasan koreksi; PostgreSQL API dan Compose upload/restart lulus."
+    }
+  ]
 }
