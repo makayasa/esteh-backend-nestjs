@@ -50,6 +50,7 @@ try {
     ...process.env,
     DATABASE_URL: `postgresql://postgres:${password}@127.0.0.1:${port}/esteh_test`,
     SESSION_SECRET: randomBytes(32).toString('hex'),
+    SWAGGER_PUBLIC: 'false',
     HOST: '127.0.0.1',
     PORT: String(appPort),
   };

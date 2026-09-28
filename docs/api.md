@@ -38,7 +38,11 @@ salt acak 16 byte dan hash 32 byte; implementasi native Node 26 (API experimenta
 
 ## OpenAPI/Swagger
 
-`GET /docs/openapi.json` dan `/docs` membutuhkan Bearer admin, termasuk assets UI.
+Default `GET /docs/openapi.json` dan `/docs` membutuhkan Bearer admin, termasuk assets UI.
+Pengecualian preview lokal yang diminta pengguna: `SWAGGER_PUBLIC=true` dalam
+`.env` membuka halaman/aset/spec tanpa login. Hanya untuk bind localhost dan data
+uji; jangan aktifkan pada akses publik. Seluruh endpoint bisnis tetap Bearer.
+Set kembali `false` dan recreate app untuk mengaktifkan guard dokumen lagi.
 Ambil JSON dengan client HTTP terautentikasi dan impor ke tooling Swagger. Halaman
 browser biasa tanpa header akan 401; tombol Authorize bukan pelindung dokumen.
 Login memiliki schema payload pada dokumen. Kontrak tambahan ditambahkan per issue.
@@ -232,6 +236,8 @@ Contoh sintetis:
    karyawan). Admin tanpa foto memakai reason dan merchantRef.
 4. Timeout: ulang payload dan key yang sama, jangan membuat sale baru. Izin tetap
    diperiksa; token dicabut401, objek di luar hari/izin404 bahkan untuk retry lama.
+5. Atau langsung pakai Postman: `npm run postman` lalu impor collection dan
+   environment dari README bagian Postman.
 
 Error validation400, unauthorized401, admin-required403, objek tersembunyi404,
 key conflict409, body besar413, login limit429, internal500 generik. Gunakan key

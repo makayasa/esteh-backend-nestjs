@@ -2,7 +2,7 @@
   "id": "p9-integration-handoff",
   "priority": 19,
   "area": "P9",
-  "title": "P9 — Verifikasi dan Handoff Frontend",
+  "title": "P9 \u2014 Verifikasi dan Handoff Frontend",
   "status": "passing",
   "branch": "aggregate-certification",
   "depends_on": [
@@ -11,7 +11,16 @@
   "spec": "docs/plans/mvp-implementation-plan.md#p9--verifikasi-dan-handoff-frontend",
   "verification": [
     "npm run verify",
-    "Jalankan seluruh acceptance P0–P8, uji beban sintetis, dokumentasi API dan restart Compose sesuai P9."
+    "Jalankan seluruh acceptance P0\u2013P8, uji beban sintetis, dokumentasi API dan restart Compose sesuai P9."
   ],
-  "evidence": [{"path":"harness/progress/2026-09-20-p9-load-handoff.md","summary":"1000 sales/10 users error0, DB receipt/refund/ledger reconcile; final Compose DB/photo persistence, protected OpenAPI/README/mobile rules, graph audit dan acceptance P0–P8 direkonsiliasi."}]
+  "evidence": [
+    {
+      "path": "harness/progress/2026-09-20-p9-load-handoff.md",
+      "summary": "1000 sales/10 users error0, DB receipt/refund/ledger reconcile; final Compose DB/photo persistence, protected OpenAPI/README/mobile rules, graph audit dan acceptance P0\u2013P8 direkonsiliasi."
+    },
+    {
+      "path": "harness/progress/2026-09-20-swagger-local-preview.md",
+      "summary": "Pengecualian eksplisit pengguna: Swagger lokal opt-in tanpa login; default guard tetap aktif, API bisnis tetap401, 6e2e dua mode dan live Docker/API suite lulus."
+    }
+  ]
 }

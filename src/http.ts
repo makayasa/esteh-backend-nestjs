@@ -53,7 +53,13 @@ export function configureHttp(app: INestApplication) {
   );
   app.useGlobalFilters(new SafeErrors());
   const identity = app.get(IdentityService);
+  const publicDocs = process.env.SWAGGER_PUBLIC === 'true';
   app.use('/docs', (req: Request, res: Response, next: NextFunction) => {
+    // Explicit local preview opt-in; business routes retain their own authorization.
+    if (publicDocs) {
+      next();
+      return;
+    }
     void identity
       .me(req.headers.authorization)
       .then((account) => {

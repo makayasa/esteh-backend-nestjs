@@ -18,6 +18,10 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    # Q29: tidak dipublikasikan ke LAN/internet. Untuk alat lokal (DataGrip),
+    # port hanya terikat ke loopback host — data uji, bukan produksi.
+    ports:
+      - '127.0.0.1:5433:5432'
     # Geen poorten gepubliceerd: de DB is alleen bereikbaar vanuit het
     # compose-netwerk (Q29: PostgreSQL niet exposeren; ook niet op LAN).
 

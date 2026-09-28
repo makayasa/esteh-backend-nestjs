@@ -105,6 +105,29 @@ Q39 hanya mengizinkan localhost/LAN tepercaya dengan data uji. Jangan membuka
 HTTP publik atau memakai kredensial/data nyata. Domain, IP publik, HTTPS,
 backup eksternal, dan notifikasi bukan syarat startup lokal.
 
+## Preview Swagger tanpa login
+
+Untuk localhost/data uji, set `SWAGGER_PUBLIC=true` dalam `.env`, lalu
+`docker compose up --build -d --wait`. Buka http://127.0.0.1:3000/docs.
+Endpoint bisnis tetap memerlukan Bearer lewat tombol Authorize. Default `false`;
+jangan aktifkan preview ini pada akses publik. Kembalikan `false` dan recreate
+app untuk memulihkan proteksi dokumen.
+
+## Postman
+
+```bash
+node scripts/make-postman.mjs   # stack harus hidup untuk mengambil OpenAPI
+```
+
+Impor `postman/esteh.postman_collection.json` dan environment:
+- `.tmp/esteh-local.postman_environment.json` — privat (gitignored), berisi
+  kredensial/token `localadmin` yang ada; jangan dibagikan.
+- `postman/esteh-local.postman_environment.example.json` — template publik.
+
+Login menyimpan token otomatis; ID hasil request diumpankan ke request berikutnya
+via test script. Semua POST memakai `Idempotency-Key` unik per pengiriman; untuk
+uji retry identik isi `fixedIdempotencyKey`. Upload bukti = tab Body → pilih file.
+
 ## Checks lokal
 
 ```bash
@@ -112,6 +135,7 @@ npm ci
 npm run verify       # harness, build, lint, unit, HTTP e2e
 npm run test:api      # CLI/HTTP/clock/audit pada PostgreSQL fresh (perlu Docker)
 npm run test:load     # suite di atas + 1.000 sales, 10 pengguna bersamaan
+node scripts/make-postman.mjs  # Postman collection dari OpenAPI yang berjalan
 npm run harness:index
 npm run harness:check
 ```

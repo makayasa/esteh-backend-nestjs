@@ -22,7 +22,7 @@ Regenerasi: `npm run harness:index`. Sumber kebenaran: shard features/progress/h
 | 16 | passing | [P6 — Koreksi, Pembatalan, Refund, dan Input Susulan](features/p6-corrections-refunds.json) | aggregate-certification | 1 |
 | 17 | passing | [P7 — Stok, Pembelian, dan Pengeluaran](features/p7-inventory-purchasing-expenses.json) | aggregate-certification | 3 |
 | 18 | passing | [P8 — Laporan JSON](features/p8-reporting.json) | aggregate-certification | 1 |
-| 19 | passing | [P9 — Verifikasi dan Handoff Frontend](features/p9-integration-handoff.json) | aggregate-certification | 1 |
+| 19 | passing | [P9 — Verifikasi dan Handoff Frontend](features/p9-integration-handoff.json) | aggregate-certification | 2 |
 
 ## Handoffs
 
@@ -31,6 +31,7 @@ Regenerasi: `npm run harness:index`. Sumber kebenaran: shard features/progress/h
 - [issue-08-cash-sales.md](handoffs/issue-08-cash-sales.md)
 - [issue-09-view-sales.md](handoffs/issue-09-view-sales.md)
 - [issues-03-07.md](handoffs/issues-03-07.md)
+- [local-docker-preview.md](handoffs/local-docker-preview.md)
 - [mvp-ticket-planning.md](handoffs/mvp-ticket-planning.md)
 - [p0-local-runtime.md](handoffs/p0-local-runtime.md)
 - [p5-qris-evidence.md](handoffs/p5-qris-evidence.md)
@@ -39,13 +40,13 @@ Regenerasi: `npm run harness:index`. Sumber kebenaran: shard features/progress/h
 
 ## Progress terbaru
 
+- [2026-09-20-swagger-local-preview.md](progress/2026-09-20-swagger-local-preview.md)
+- [2026-09-20-postman-collection.md](progress/2026-09-20-postman-collection.md)
 - [2026-09-20-p9-load-handoff.md](progress/2026-09-20-p9-load-handoff.md)
 - [2026-09-20-p8-reporting.md](progress/2026-09-20-p8-reporting.md)
 - [2026-09-20-p5-p7-review-fixes.md](progress/2026-09-20-p5-p7-review-fixes.md)
+- [2026-09-20-local-docker-preview.md](progress/2026-09-20-local-docker-preview.md)
 - [2026-09-20-aggregate-pr.md](progress/2026-09-20-aggregate-pr.md)
 - [2026-09-19-p7-inventory-purchasing.md](progress/2026-09-19-p7-inventory-purchasing.md)
 - [2026-09-19-p6-corrections-refunds.md](progress/2026-09-19-p6-corrections-refunds.md)
 - [2026-09-19-p5-qris-evidence.md](progress/2026-09-19-p5-qris-evidence.md)
-- [2026-09-19-p0-local-runtime-reconciliation.md](progress/2026-09-19-p0-local-runtime-reconciliation.md)
-- [2026-09-19-mvp-ticket-draft.md](progress/2026-09-19-mvp-ticket-draft.md)
-- [2026-09-19-issues-03-07-closeout.md](progress/2026-09-19-issues-03-07-closeout.md)
